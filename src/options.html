@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StagedAF settings</title>
+<link rel="stylesheet" href="options.css">
+</head>
+<body>
+<main>
+  <h1>✦ StagedAF <span>Virtual staging for AppFolio</span></h1>
+
+  <section>
+    <h2>Image model</h2>
+    <p class="hint">StagedAF sends photos straight from your browser to the image service using your own API key. The key is stored only in this browser.</p>
+    <label>OpenAI API key
+      <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
+    </label>
+    <div class="cols">
+      <label>Model <input id="model" type="text" spellcheck="false"></label>
+      <label>Quality
+        <select id="quality"><option value="high">High (best, slowest)</option><option value="medium">Medium</option><option value="low">Low (draft)</option><option value="auto">Auto</option></select>
+      </label>
+      <label>Keep-the-room fidelity
+        <select id="inputFidelity"><option value="high">High</option><option value="low">Low</option><option value="default">Model default</option></select>
+      </label>
+    </div>
+    <details>
+      <summary>Advanced</summary>
+      <div class="cols">
+        <label>API base URL <input id="apiBase" type="text" spellcheck="false"></label>
+        <label>Longest edge sent (px) <input id="maxInputEdge" type="number" min="512" max="4096" step="64"></label>
+        <label>Photos staged at once <input id="concurrency" type="number" min="1" max="4"></label>
+      </div>
+    </details>
+    <div class="actions"><button id="test" type="button">Test key</button><span id="testResult" role="status"></span></div>
+  </section>
+
+  <section>
+    <h2>Staging</h2>
+    <label>Default style <select id="style"></select></label>
+    <label>Default staging prompt
+      <textarea id="basePrompt" rows="12" spellcheck="true"></textarea>
+    </label>
+    <p class="hint"><code>{room}</code> and <code>{style}</code> are filled in per photo. Instructions typed for a specific photo are added after this prompt.</p>
+    <div class="actions"><button id="resetPrompt" type="button">Restore default prompt</button></div>
+  </section>
+
+  <section>
+    <h2>Behaviour</h2>
+    <label class="check"><input id="stageUploads" type="checkbox"> Stage new uploads — ask which photos to stage whenever I upload on a property or unit page</label>
+    <label class="check"><input id="reviewBeforeUpload" type="checkbox"> Show me before/after before staged uploads are sent to AppFolio</label>
+    <label class="check"><input id="autoReplace" type="checkbox"> Replace existing photos automatically, without a before/after review</label>
+    <label class="check"><input id="backupOriginal" type="checkbox"> Save the original to Downloads/StagedAF before replacing it</label>
+    <label class="check"><input id="disclosureLabel" type="checkbox"> Add a disclosure label to staged photos</label>
+    <label>Label text <input id="disclosureText" type="text"></label>
+  </section>
+
+  <section>
+    <h2>Image host access</h2>
+    <p class="hint">Only needed if staging an existing photo fails with “can't download photos from …”. Enter that host to let StagedAF read photos from it.</p>
+    <div class="actions"><input id="host" type="text" placeholder="images.example-cdn.com" spellcheck="false"><button id="grant" type="button">Grant access</button><span id="grantResult" role="status"></span></div>
+  </section>
+
+  <section>
+    <h2>AppFolio page detection</h2>
+    <p class="hint">Leave these blank to auto-detect. If Stage buttons don't appear, or replacing can't find the upload or delete control, use “Copy page diagnostics” in the StagedAF panel on that page to work out the right CSS selectors.</p>
+    <label>Pages to run on (regular expression matched against the URL path) <input id="pagePattern" type="text" spellcheck="false"></label>
+    <div class="cols">
+      <label>Photo selector <input id="photoSelector" type="text" spellcheck="false" placeholder="auto"></label>
+      <label>Upload file-input selector <input id="uploadInputSelector" type="text" spellcheck="false" placeholder="auto"></label>
+      <label>Delete-button selector (within a photo) <input id="deleteSelector" type="text" spellcheck="false" placeholder="auto"></label>
+    </div>
+    <label>Smallest image treated as a photo (px wide on screen) <input id="minPhotoSize" type="number" min="40" max="600"></label>
+  </section>
+
+  <p id="saved" role="status"></p>
+</main>
+<script src="shared/defaults.js"></script>
+<script src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>123 Main St - Mock AppFolio</title>
+<style>
+body{font:14px Arial;margin:0;background:#f4f5f7}header{background:#1f4e79;color:#fff;padding:12px 20px}
+main{padding:20px;max-width:1000px}.gallery{display:flex;flex-wrap:wrap;gap:12px}
+.photo{position:relative;width:240px;background:#fff;border:1px solid #ccc;padding:4px}.photo img{width:100%;display:block}
+.photo a{position:absolute;top:8px;right:8px;background:#fff;border-radius:3px;padding:2px 6px;text-decoration:none;color:#900}
+</style></head>
+<body>
+<header><img src="/logo.png" alt="logo" width="20" height="20"> Mock AppFolio Property Manager</header>
+<main>
+<h1>123 Main St</h1>
+<button id="delete-property" class="btn-danger">Delete Property</button>
+<h2>Marketing Photos</h2>
+<div class="gallery" id="gallery"></div>
+<p><button id="upload-btn" type="button">Upload Photo</button>
+<input id="file" type="file" accept="image/*" multiple style="display:none"></p>
+</main>
+<script>
+window.__uploads = []; window.__deleted = []; let n = 0;
+function addPhoto(src){
+  const d=document.createElement('div'); d.className='photo';
+  d.innerHTML='<img src="'+src+'"><a href="#" class="js-photo-delete" title="Delete photo" data-confirm="Are you sure?"><i class="fa fa-trash"></i>x</a>';
+  d.querySelector('a').onclick=e=>{e.preventDefault(); if(confirm('Are you sure?')){window.__deleted.push(src); d.remove();}};
+  document.getElementById('gallery').append(d);
+}
+addPhoto('/photos/1.jpg'); addPhoto('/photos/2.jpg');
+document.getElementById('upload-btn').onclick=()=>document.getElementById('file').click();
+document.getElementById('file').addEventListener('change',e=>{
+  for(const f of e.target.files){ window.__uploads.push({name:f.name,size:f.size,type:f.type}); const id=++n; setTimeout(()=>addPhoto('/uploaded/'+id+'.jpg'),400); }
+  e.target.value='';
+});
+document.getElementById('delete-property').onclick=()=>{window.__propertyDeleted=true};
+</script></body></html>
