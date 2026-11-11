@@ -74,6 +74,7 @@
       const job = SAF.jobs.find((j) => j.status === 'queued');
       if (!job) return;
       job.status = 'running';
+      job.startedAt = Date.now();
       running++;
       SAF.emit('jobs', job);
       run(job)
@@ -97,7 +98,16 @@
       }
       job.port = port;
       let settled = false;
+      // Staging normally takes 30 seconds to 2 minutes. Give up after 5.
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error('The image service took more than 5 minutes to answer, so this was stopped. Try again, or use a lower quality in settings.'));
+        port.disconnect();
+      }, 5 * 60 * 1000);
       port.onMessage.addListener((msg) => {
+        if (settled) return;
+        clearTimeout(timer);
         settled = true;
         if (msg.type === 'done') resolve(msg);
         else reject(Object.assign(new Error(msg.error || 'Staging failed'), { code: msg.code }));
@@ -105,6 +115,7 @@
       });
       port.onDisconnect.addListener(() => {
         void chrome.runtime.lastError;
+        clearTimeout(timer);
         if (!settled) reject(new Error(job.cancelled ? 'Cancelled' : 'Lost connection to the staging worker. Try again.'));
       });
       port.postMessage({ type: 'run', job: payload });
@@ -150,6 +161,12 @@
     if (s.disclosureLabel && s.disclosureText) result = await SAF.addLabel(result, s.disclosureText);
     job.resultBlob = result;
   }
+
+  // "0:42" since the job started running.
+  SAF.elapsed = (job) => {
+    const sec = Math.max(0, Math.floor((Date.now() - (job.startedAt || Date.now())) / 1000));
+    return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+  };
 
   SAF.jobFile = (job) => new File([job.resultBlob], SAF.stagedName(job.name), { type: 'image/jpeg' });
 })();

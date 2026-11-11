@@ -20,6 +20,8 @@
     }
   }
 
+  const statusText = (job) => (job.status === 'running' ? 'Staging… ' + SAF.elapsed(job) : STATUS[job.status]);
+
   function jobRow(job) {
     const actions = [];
     if (job.origin === 'existing') {
@@ -28,7 +30,7 @@
       actions.push(h('button', { class: 'link', title: 'Remove from queue', onclick: () => SAF.removeJob(job) }, '✕'));
     }
     const shortName = String(job.name).split(/[?#]/)[0].split('/').pop();
-    return h('div', { class: 'job', title: job.error || '' }, h('span', { class: 'dot ' + job.status }), h('span', { class: 'nm grow' }, shortName), h('span', { class: 'muted' }, STATUS[job.status]), actions);
+    return h('div', { class: 'job', title: job.error || '' }, h('span', { class: 'dot ' + job.status }), h('span', { class: 'nm grow' }, shortName), (job.statusEl = h('span', { class: 'muted' }, statusText(job))), actions);
   }
 
   function render() {
@@ -61,5 +63,9 @@
     ui.root().append(dock);
     for (const ev of ['jobs', 'batches', 'settings', 'navigate']) SAF.on(ev, render);
     render();
+    // Tick the elapsed time on running jobs without rebuilding the panel.
+    setInterval(() => {
+      for (const job of SAF.jobs) if (job.status === 'running' && job.statusEl) job.statusEl.textContent = statusText(job);
+    }, 1000);
   };
 })();
