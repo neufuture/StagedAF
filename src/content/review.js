@@ -12,8 +12,8 @@
       h('figure', null, h('figcaption', null, 'Staged'), job.resultBlob ? SAF.thumb(job.resultBlob, 900, 700) : h('div', { class: 'muted' }, 'No preview'))
     );
 
-  const originalName = (url) => {
-    const base = String(url).split(/[?#]/)[0].split('/').pop() || 'photo';
+  const originalName = (name) => {
+    const base = (String(name).split(/[?#]/)[0].split('/').pop() || 'photo').replace(/[^\w.-]+/g, '_');
     return 'original-' + (/\.[a-z0-9]{2,5}$/i.test(base) ? base : base + '.jpg');
   };
 
@@ -33,8 +33,9 @@
         return false;
       }
       if (deleteOriginal && SAF.settings.backupOriginal) {
-        await SAF.download(job.meta.url, originalName(job.meta.url)).catch(() => (job.beforeBlob ? SAF.download(job.beforeBlob, originalName(job.meta.url)) : null)).catch(() => {});
+        await SAF.download(job.meta.url, originalName(job.name)).catch(() => (job.beforeBlob ? SAF.download(job.beforeBlob, originalName(job.name)) : null)).catch(() => {});
       }
+      const wasDefault = !!img && A.isDefault(img);
       const before = new Set(A.findPhotos().map(A.photoKey));
       const closeToast = ui.toast('Uploading the staged photo to AppFolio…', { ms: 0 });
       await A.deliver(sink, [file]);
@@ -49,8 +50,10 @@
         SAF.removeJob(job);
         return true;
       }
+      // If the original was the unit's default photo, hand that over first.
+      const defaultMoved = wasDefault ? await A.makeDefault(appeared) : true;
       const res = await A.deletePhoto(key);
-      if (res.ok) ui.toast('Photo replaced with the staged version.', { kind: 'ok' });
+      if (res.ok) ui.toast('Photo replaced with the staged version.' + (defaultMoved ? '' : ' It was the default photo — pick a new default.'), { kind: 'ok', ms: defaultMoved ? 6000 : 15000 });
       else ui.toast(`The staged photo is uploaded, but the original is still there: ${res.reason} Please delete it by hand.`, { kind: 'error', ms: 20000 });
       SAF.removeJob(job);
       return res.ok;

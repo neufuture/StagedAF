@@ -15,7 +15,7 @@
     const input = e.target;
     if (A.passing || !(input instanceof HTMLInputElement) || input.type !== 'file' || ui.isOurs(input)) return;
     const files = [...(input.files || [])];
-    if (!files.some(isImage)) return;
+    if (!files.some(isImage) || !A.isPhotoUpload(input)) return;
     const sink = { type: 'input', el: input };
     if (A.isTargetPage()) A.lastSink = sink;
     if (!wanted(files)) return;
@@ -26,7 +26,7 @@
   function onDrop(e) {
     if (A.passing || ui.isOurs(e.target) || !e.dataTransfer) return;
     const files = [...e.dataTransfer.files];
-    if (!files.some(isImage)) return;
+    if (!files.some(isImage) || !A.isPhotoUpload(e.target)) return;
     const sink = { type: 'drop', el: e.target };
     if (A.isTargetPage()) A.lastSink = sink;
     if (!wanted(files)) return;
@@ -165,11 +165,10 @@
     }
     files.push(...batch.others);
 
-    let sink = batch.sink;
-    if (!sink.el.isConnected) {
-      if (A.lastSink === sink) A.lastSink = null;
-      sink = await A.findSink();
-    }
+    // Prefer the page's photo file input (also for photos that were dropped:
+    // the drop zone may be hidden again by now); else the original target.
+    if (A.lastSink === batch.sink && !batch.sink.el.isConnected) A.lastSink = null;
+    let sink = batch.sink.type === 'input' && batch.sink.el.isConnected ? batch.sink : (await A.findSink()) || (batch.sink.el.isConnected ? batch.sink : null);
     if (!sink) {
       for (const f of staged) await SAF.download(f, f.name).catch(() => {});
       ui.toast("AppFolio's uploader is no longer on this page, so the staged photos were saved to Downloads/StagedAF. Upload them from there.", { kind: 'error', ms: 20000 });

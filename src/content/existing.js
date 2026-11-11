@@ -94,7 +94,7 @@
       const url = A.bestUrl(img);
       if (job) SAF.removeJob(job);
       closePopover();
-      const next = SAF.createJob({ name: url, source: { url }, room: room.value, ...fields.values(), origin: 'existing', meta: { key, url } });
+      const next = SAF.createJob({ name: A.photoName(img), source: { url }, room: room.value, ...fields.values(), origin: 'existing', meta: { key, url } });
       next.finished.then(SAF.existingJobDone);
       schedule();
     };

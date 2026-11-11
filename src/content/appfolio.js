@@ -2,9 +2,10 @@
 // public API for photos, so this drives the page the way a person would:
 // finding photos, handing files to the uploader, clicking delete.
 //
-// Detection is heuristic by default. If AppFolio's markup defeats it, the
-// three selectors in settings (photo / upload input / delete button) override
-// the guesses, and "Copy page diagnostics" in the dock reports what was found.
+// AppFolio's "Photos" card on unit and property pages (the AF selectors
+// below) is recognised directly. On any page without that card, detection
+// falls back to heuristics. The three selectors in settings override both,
+// and "Copy page diagnostics" in the dock reports what was found.
 (() => {
   const SAF = globalThis.SAF;
   const A = (SAF.appfolio = {});
@@ -18,6 +19,27 @@
     } catch {
       return true;
     }
+  };
+
+  // AppFolio's Photos card, as rendered on unit / property pages.
+  const AF = {
+    section: '.js-attached-photos',
+    photo: '.js-attached-photo',
+    img: '.js-attached-photos .js-attached-photo img',
+    input: '.js-attached-photos-form input[type="file"]',
+    del: 'a[data-method="delete"][href*="/photos/"]',
+    defaultFlag: '.js-attached-photo-actions-default-flag',
+    makeDefault: '.js-attached-photo-actions-make-default',
+    otherUploads: '.js-attached-files, .js-attached-files-form', // documents, not photos
+  };
+  const hasPhotosCard = () => !!document.querySelector(AF.section);
+
+  // Is this element part of the photo uploader (as opposed to, say, the
+  // document attachments uploader on the same page)?
+  A.isPhotoUpload = (el) => {
+    if (!el || !el.closest) return false;
+    if (el.closest(AF.otherUploads)) return false;
+    return hasPhotosCard() ? !!el.closest(AF.section) : true;
   };
 
   const q = (sel, root = document) => {
@@ -52,7 +74,29 @@
         .map((el) => (el.matches('img') ? el : el.querySelector('img')))
         .filter((img) => img && !SAF.ui.isOurs(img));
     }
+    if (hasPhotosCard()) return q(AF.img);
     return [...document.images].filter(looksLikePhoto);
+  };
+
+  // AppFolio keeps the uploaded file name in the image's alt text.
+  A.photoName = (img) => (/\.[a-z0-9]{2,5}$/i.test(img.alt || '') ? img.alt : A.bestUrl(img));
+
+  A.isDefault = (img) => {
+    const card = img.closest(AF.photo);
+    const flag = card && card.querySelector(AF.defaultFlag);
+    return !!flag && !flag.classList.contains('d-none') && getComputedStyle(flag).display !== 'none';
+  };
+
+  A.makeDefault = async (img) => {
+    const card = img.closest(AF.photo);
+    const link = card && card.querySelector(AF.makeDefault);
+    if (!link) return false;
+    link.click();
+    for (let i = 0; i < 20; i++) {
+      await SAF.sleep(250);
+      if (!img.isConnected || A.isDefault(img)) return true;
+    }
+    return false;
   };
 
   A.photoKey = (img) => img.currentSrc || img.src || '';
@@ -109,6 +153,8 @@
   // photo and a delete control: that is the photo's "card".
   A.findDelete = (img) => {
     const custom = (SAF.settings.deleteSelector || '').trim();
+    const afCard = img.closest(AF.photo);
+    if (!custom && afCard) return afCard.querySelector(AF.del);
     const photos = A.findPhotos();
     const ir = img.getBoundingClientRect();
     let node = img.parentElement;
@@ -148,6 +194,12 @@
 
     document.dispatchEvent(new CustomEvent('saf:auto-confirm'));
     const boxesBefore = new Set(q(CONFIRM_BOX).filter(visible));
+    // AppFolio names its confirm button on the link itself ("Delete").
+    const yesText = (del.getAttribute('data-confirm-continue') || '').trim().toLowerCase();
+    const isYes = (b) => {
+      const text = (b.textContent || b.value || '').trim();
+      return yesText ? text.toLowerCase() === yesText : CONFIRM_YES.test(text);
+    };
     del.click();
     let confirmed = false;
     try {
@@ -157,7 +209,7 @@
         if (confirmed) continue;
         // An in-page "Are you sure?" dialog that appeared after our click.
         for (const box of q(CONFIRM_BOX).filter((b) => visible(b) && !boxesBefore.has(b) && !SAF.ui.isOurs(b))) {
-          const yes = q(CLICKABLE, box).find((b) => visible(b) && CONFIRM_YES.test(b.textContent || b.value || ''));
+          const yes = q(CLICKABLE, box).find((b) => visible(b) && isYes(b));
           if (yes) {
             yes.click();
             confirmed = true;
@@ -168,7 +220,7 @@
     } finally {
       document.dispatchEvent(new CustomEvent('saf:auto-confirm-off'));
     }
-    return { ok: false, reason: 'Clicked delete, but the original photo is still showing.' };
+    return { ok: false, reason: confirmed ? 'Clicked delete, but the original photo is still showing.' : "AppFolio's delete confirmation may still be open — confirm it to finish." };
   };
 
   // ---- Uploading ----------------------------------------------------------
@@ -182,7 +234,8 @@
   function pickInput(near) {
     const custom = (SAF.settings.uploadInputSelector || '').trim();
     if (custom) return q(custom).find((el) => el.matches('input[type="file"]')) || null;
-    const inputs = fileInputs();
+    if (hasPhotosCard()) return q(AF.input)[0] || q('input[type="file"]', document.querySelector(AF.section))[0] || null;
+    const inputs = fileInputs().filter((i) => !i.closest(AF.otherUploads));
     if (!inputs.length) return null;
     // Closest to the photo in the DOM tree wins.
     for (let node = near && near.parentElement; node; node = node.parentElement) {
@@ -198,8 +251,8 @@
   // Where staged files should be handed to AppFolio. Returns
   // {type:'input'|'drop', el} or null.
   A.findSink = async (near) => {
-    if (A.lastSink && A.lastSink.el.isConnected) return A.lastSink;
     let input = pickInput(near);
+    if (!input && A.lastSink && A.lastSink.el.isConnected) return A.lastSink;
     if (!input) {
       // Some uploaders only create their file input once "Upload photo" is
       // clicked. Click it for the user, with the file chooser suppressed.
@@ -259,15 +312,16 @@
     }
   };
 
-  // Resolves true once a photo that wasn't there before shows up with a real
-  // (uploaded) URL; false on timeout. Local blob:/data: previews don't count.
+  // Resolves with the new <img> once a photo that wasn't there before shows up
+  // with a real (uploaded) URL; null on timeout. blob:/data: previews don't count.
   A.waitForNewPhoto = async (beforeKeys, timeout = 90000) => {
     const end = Date.now() + timeout;
     while (Date.now() < end) {
       await SAF.sleep(400);
-      if (A.findPhotos().some((p) => !beforeKeys.has(A.photoKey(p)) && /^https?:/i.test(A.photoKey(p)) && p.complete && p.naturalWidth > 0)) return true;
+      const added = A.findPhotos().find((p) => !beforeKeys.has(A.photoKey(p)) && /^https?:/i.test(A.photoKey(p)) && p.complete && p.naturalWidth > 0);
+      if (added) return added;
     }
-    return false;
+    return null;
   };
 
   // ---- Diagnostics --------------------------------------------------------
@@ -299,6 +353,7 @@
       stagedaf: chrome.runtime.getManifest().version,
       page: location.pathname.replace(/\d+/g, 'N'),
       matchesPagePattern: A.isTargetPage(),
+      appfolioPhotosCard: hasPhotosCard(),
       photoCount: photos.length,
       photos: photos.slice(0, 4).map((img) => {
         const r = img.getBoundingClientRect();

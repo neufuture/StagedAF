@@ -1,34 +1,103 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>123 Main St - Mock AppFolio</title>
+<!-- Mock of AppFolio's unit page. The Photos and Attachments cards mirror the
+     real markup (class names, attributes, structure); all data is made up. -->
+<html><head><meta charset="utf-8"><title>12 Example St - Example Homes - Mock AppFolio</title>
+<meta name="csrf-token" content="test-token">
 <style>
 body{font:14px Arial;margin:0;background:#f4f5f7}header{background:#1f4e79;color:#fff;padding:12px 20px}
-main{padding:20px;max-width:1000px}.gallery{display:flex;flex-wrap:wrap;gap:12px}
-.photo{position:relative;width:240px;background:#fff;border:1px solid #ccc;padding:4px}.photo img{width:100%;display:block}
-.photo a{position:absolute;top:8px;right:8px;background:#fff;border-radius:3px;padding:2px 6px;text-decoration:none;color:#900}
+main{padding:20px;max-width:1000px}.card{background:#fff;border:1px solid #ccc;margin-bottom:16px}.card-header{display:flex;justify-content:space-between;padding:8px}
+.card-body{padding:8px}h2{font-size:16px;margin:0}.btn{position:relative;overflow:hidden;border:1px solid #888;padding:3px 8px;border-radius:3px;display:inline-block}
+.btn input[type=file]{position:absolute;inset:0;opacity:0}
+ul.js-attached-photos-list{list-style:none;margin:0;padding:0}.attached-photo{float:left;width:160px;margin:0 12px 12px 0}
+.attached-photo__name{font-size:11px}.attached-photo__actions{font-size:11px}.u-float-right{float:right}.d-none{display:none}
+.u-clearfix::after{content:'';display:block;clear:both}.badge{background:#2a7;color:#fff;padding:0 4px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal-content{background:#fff;padding:20px;border-radius:6px}
 </style></head>
 <body>
-<header><img src="/logo.png" alt="logo" width="20" height="20"> Mock AppFolio Property Manager</header>
-<main>
-<h1>123 Main St</h1>
-<button id="delete-property" class="btn-danger">Delete Property</button>
-<h2>Marketing Photos</h2>
-<div class="gallery" id="gallery"></div>
-<p><button id="upload-btn" type="button">Upload Photo</button>
-<input id="file" type="file" accept="image/*" multiple style="display:none"></p>
+<header><img class="logo" alt="AppFolio Property Manager" width="30" height="30" src="/logo.png"> Mock AppFolio Property Manager</header>
+<main class="main-container units show">
+<div id="unit_default_photo_show"><div id="attached-photos-default-photo">
+  <img alt="living.jpg" height="118" width="178" class="property_img" src="https://demo.appfolio.com/images/aaa/medium.jpg">
+</div></div>
+<h1>Example Homes - 12 Example St</h1>
+<button id="delete-property" class="btn btn-danger">Delete Unit</button>
+
+<div id="unit_photos_show" class="js-block-show">
+<section class="card mb-3 js-attached-photos attached-items">
+  <div class="card-header">
+    <h2 class="card-title">Photos</h2>
+    <div class="attached-items__actions">
+      <form id="attached-photos-form" class="js-attached-photos-form attached-items__form" data-parent-object="Unit" data-parent-id="77" data-marketing="false" enctype="multipart/form-data" action="" accept-charset="UTF-8" method="post">
+        <span class="btn btn-secondary btn-sm"><i class="fa-solid fa-upload"></i>&nbsp;Upload Photo<input type="file" name="file" id="file" multiple="multiple" /></span>
+      </form>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="js-attached-photos-box drop-zone-box" style="display:none;"><span class="drop-zone-box__message">Drag files here to upload.</span></div>
+    <div class="js-attached-photos-errors"></div>
+    <ul class="js-attached-photos-list u-clearfix is-sortable"></ul>
+  </div>
+</section>
+</div>
+
+<div id="unit_attachments_show">
+<section class="card mb-3 js-attached-files attached-items">
+  <div class="card-header">
+    <h2 class="card-title">Attachments</h2>
+    <form class="js-attached-files-form attached-items__form" enctype="multipart/form-data" action="/attachments.js?no_confirm_delete=1" method="post">
+      <span class="btn btn-secondary btn-sm"><i class="fa-solid fa-upload"></i>&nbsp;Upload File<input type="file" name="attachment[attachment]" id="attachment-file" /></span>
+    </form>
+  </div>
+  <div class="card-body"><ul class="js-attached-files-list"></ul></div>
+</section>
+</div>
 </main>
 <script>
-window.__uploads = []; window.__deleted = []; let n = 0;
-function addPhoto(src){
-  const d=document.createElement('div'); d.className='photo';
-  d.innerHTML='<img src="'+src+'"><a href="#" class="js-photo-delete" title="Delete photo" data-confirm="Are you sure?"><i class="fa fa-trash"></i>x</a>';
-  d.querySelector('a').onclick=e=>{e.preventDefault(); if(confirm('Are you sure?')){window.__deleted.push(src); d.remove();}};
-  document.getElementById('gallery').append(d);
+window.__uploads = []; window.__deleted = []; window.__attachments = []; window.__default = null; let n = 100;
+const list = document.querySelector('.js-attached-photos-list');
+function addPhoto(id, name, uuid, isDefault){
+  const li = document.createElement('li'); li.className = 'js-attached-photo attached-photo'; li.dataset.photoId = 'photo_' + id;
+  li.innerHTML = `<div class="js-attached-photo-name attached-photo__name">${name}</div>
+    <a class="js-attached-photo-previewable-image w-100 h-100 d-block" href="/photos/${id}?preview=true">
+      <img alt="${name}" height="106" width="160" src="https://demo.appfolio.com/images/${uuid}/original.jpg" /></a>
+    <div class="js-attached-photo-actions attached-photo__actions">
+      <span class="badge badge-success js-attached-photo-actions-default-flag ${isDefault ? '' : 'd-none'}">Default</span>
+      <a class="${isDefault ? 'd-none ' : ''}js-attached-photo-actions-make-default" data-remote="true" rel="nofollow" data-method="put" href="/properties/5/units/77/change_default_photo?photo_id=${id}">Make Default</a>
+      <a data-confirm="Do you really want to delete '${name}'?" data-confirm-continue="Delete" data-confirm-color="danger" class="u-float-right" data-remote="true" rel="nofollow" data-method="delete" href="/photos/${id}"><span class="fa-solid fa-minus-circle js-has-many-fields-remove has_many_fields_remove">–</span></a>
+    </div>`;
+  list.append(li);
 }
-addPhoto('/photos/1.jpg'); addPhoto('/photos/2.jpg');
-document.getElementById('upload-btn').onclick=()=>document.getElementById('file').click();
-document.getElementById('file').addEventListener('change',e=>{
-  for(const f of e.target.files){ window.__uploads.push({name:f.name,size:f.size,type:f.type}); const id=++n; setTimeout(()=>addPhoto('/uploaded/'+id+'.jpg'),400); }
-  e.target.value='';
+function setDefault(li){
+  window.__default = li.dataset.photoId;
+  for (const other of list.children) {
+    other.querySelector('.js-attached-photo-actions-default-flag').classList.toggle('d-none', other !== li);
+    other.querySelector('.js-attached-photo-actions-make-default').classList.toggle('d-none', other === li);
+  }
+}
+// rails-ujs style: data-confirm opens an in-page modal, not window.confirm.
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a'); if (!a) return;
+  e.preventDefault();
+  const li = a.closest('.js-attached-photo'); if (!li) return;
+  if (a.dataset.method === 'put') return setTimeout(() => setDefault(li), 150);
+  if (a.dataset.method !== 'delete') return;
+  const modal = document.createElement('div'); modal.className = 'modal fade show';
+  modal.innerHTML = `<div class="modal-dialog"><div class="modal-content"><p>${a.dataset.confirm}</p>
+    <button type="button" class="btn btn-secondary">Cancel</button> <button type="button" class="btn btn-danger">${a.dataset.confirmContinue}</button></div></div>`;
+  modal.querySelector('.btn-secondary').onclick = () => modal.remove();
+  modal.querySelector('.btn-danger').onclick = () => { modal.remove(); window.__deleted.push(a.getAttribute('href')); li.remove(); };
+  document.body.append(modal);
 });
-document.getElementById('delete-property').onclick=()=>{window.__propertyDeleted=true};
+function bindPhotoInput(input){
+  input.addEventListener('change', () => {
+    for (const f of input.files) { window.__uploads.push({ name: f.name, size: f.size, type: f.type }); const id = ++n; setTimeout(() => addPhoto(id, f.name, 'up' + id, false), 400); }
+    // Like many upload widgets, swap the input for a fresh copy after use.
+    const fresh = input.cloneNode(); input.replaceWith(fresh); bindPhotoInput(fresh);
+  });
+}
+bindPhotoInput(document.getElementById('file'));
+document.getElementById('attachment-file').addEventListener('change', (e) => window.__attachments.push(e.target.files[0].name));
+document.getElementById('delete-property').onclick = () => { window.__propertyDeleted = true; };
+addPhoto(1, 'living.jpg', 'aaa', true); addPhoto(2, 'room two.jpg', 'bbb', false);
 </script></body></html>

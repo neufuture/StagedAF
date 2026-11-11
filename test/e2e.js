@@ -47,7 +47,7 @@ const assert = (cond, msg) => {
   try {
     await ctx.route('https://demo.appfolio.com/**', (route) => {
       const p = new URL(route.request().url()).pathname;
-      if (/\.(jpg|png)$/.test(p)) return route.fulfill({ contentType: 'image/jpeg', body: fx(p.startsWith('/uploaded') ? 'staged.jpg' : 'empty.jpg') });
+      if (/\.(jpg|png)$/.test(p)) return route.fulfill({ contentType: 'image/jpeg', body: fx(p.startsWith('/images/up') ? 'staged.jpg' : 'empty.jpg') });
       route.fulfill({ contentType: 'text/html', body: fx('property.html') });
     });
     const sw = ctx.serviceWorkers()[0] || (await ctx.waitForEvent('serviceworker'));
@@ -56,12 +56,12 @@ const assert = (cond, msg) => {
     const page = await ctx.newPage();
     page.on('pageerror', (e) => console.log('PAGE ERROR', e.message));
     page.on('console', (m) => m.type() === 'error' && console.log('console.error:', m.text()));
-    await page.goto('https://demo.appfolio.com/properties/12');
+    await page.goto('https://demo.appfolio.com/properties/5/units/77');
     const chip = page.locator('staged-af .chip');
     await chip.first().waitFor();
 
     console.log('Existing photo flow');
-    assert((await chip.count()) === 2, 'a Stage chip on each of the 2 photos (logo ignored)');
+    assert((await chip.count()) === 2, 'a Stage chip on each of the 2 photos (logo and default-photo banner ignored)');
     await chip.first().click();
     await page.locator('staged-af .pop textarea').fill('grey sectional sofa');
     await page.screenshot({ path: path.join(__dirname, 'out-popover.png') });
@@ -76,10 +76,11 @@ const assert = (cond, msg) => {
     await page.screenshot({ path: path.join(__dirname, 'out-review.png') });
     await page.locator('staged-af .modal button', { hasText: 'Replace original' }).click();
     await page.waitForFunction(() => window.__deleted.length === 1, null, { timeout: 30000 });
-    const st = await page.evaluate(() => ({ uploads: window.__uploads, deleted: window.__deleted, srcs: [...document.querySelectorAll('.photo img')].map((i) => i.getAttribute('src')), prop: !!window.__propertyDeleted }));
-    assert(st.uploads.length === 1 && st.uploads[0].name === '1-staged.jpg' && st.uploads[0].type === 'image/jpeg', 'staged photo uploaded through the page uploader as 1-staged.jpg');
-    assert(st.deleted[0] === '/photos/1.jpg' && !st.srcs.includes('/photos/1.jpg') && st.srcs.includes('/uploaded/1.jpg'), 'original deleted (confirm auto-accepted) only after the new photo appeared');
-    assert(!st.prop, '"Delete Property" button was never touched');
+    const st = await page.evaluate(() => ({ uploads: window.__uploads, deleted: window.__deleted, ids: [...document.querySelectorAll('.js-attached-photo')].map((li) => li.dataset.photoId), def: window.__default, prop: !!window.__propertyDeleted, modals: document.querySelectorAll('.modal').length }));
+    assert(st.uploads.length === 1 && st.uploads[0].name === 'living-staged.jpg' && st.uploads[0].type === 'image/jpeg', 'staged photo uploaded through the Photos uploader as living-staged.jpg');
+    assert(st.deleted[0] === '/photos/1' && st.ids.join() === 'photo_2,photo_101' && st.modals === 0, "original deleted via AppFolio's own confirm dialog, after the new photo appeared");
+    assert(st.def === 'photo_101', 'replaced photo was the default, so the staged one was made default first');
+    assert(!st.prop, '"Delete Unit" button was never touched');
 
     await page.locator('staged-af .toast.ok', { hasText: 'Photo replaced' }).waitFor();
     assert((await page.locator('staged-af .toast', { hasText: 'Staged photo is ready' }).count()) === 0, 'stale "ready" toast cleared once reviewed');
@@ -95,7 +96,14 @@ const assert = (cond, msg) => {
     console.log('New upload flow');
     await page.locator('#file').setInputFiles([path.join(__dirname, 'fixtures', 'empty.jpg')]);
     await page.waitForTimeout(800);
-    assert((await page.evaluate(() => window.__uploads.length)) === 2 && (await page.locator('staged-af .overlay').count()) === 0, 'toggle off: upload passes straight through');
+    await page.locator('staged-af .dock .switch input').check();
+    await page.waitForTimeout(300);
+    await page.locator('#attachment-file').setInputFiles([path.join(__dirname, 'fixtures', 'empty.jpg')]);
+    await page.waitForTimeout(500);
+    assert((await page.evaluate(() => window.__attachments.length)) === 1 && (await page.locator('staged-af .overlay').count()) === 0, 'Attachments uploader is left alone even with staging on');
+    await page.locator('staged-af .dock .switch input').uncheck();
+    await page.waitForTimeout(300);
+    assert((await page.evaluate(() => window.__uploads.length)) === 2, 'toggle off: upload passes straight through');
     await page.locator('staged-af .dock .switch input').check();
     await page.waitForTimeout(300);
     fs.copyFileSync(path.join(__dirname, 'fixtures', 'empty.jpg'), path.join(os.tmpdir(), 'kitchen.jpg'));
@@ -127,7 +135,7 @@ const assert = (cond, msg) => {
     const copied = page.locator('staged-af .toast', { hasText: 'diagnostics copied' });
     await box.or(copied).first().waitFor();
     const diag = JSON.parse((await box.count()) ? await box.inputValue() : await page.evaluate(() => navigator.clipboard.readText()));
-    assert(diag.photoCount >= 2 && /delete/i.test(diag.photos[0].deleteFound) && diag.fileInputs.length === 1 && diag.page === '/properties/N', 'diagnostics describe photos, delete control and file input');
+    assert(diag.photoCount >= 2 && /delete/i.test(diag.photos[0].deleteFound) && diag.fileInputs.length === 2 && diag.appfolioPhotosCard && diag.page === '/properties/N/units/N', 'diagnostics describe photos, delete control and file input');
 
     const opts = await ctx.newPage();
     await opts.goto(`chrome-extension://${new URL(sw.url()).host}/src/options.html`);

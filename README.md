@@ -57,11 +57,21 @@ photos to be disclosed. The label option is there for that.
 ## How it works with AppFolio (and its limits)
 
 AppFolio has no public API for photos, so StagedAF works the page the way you
-would: it gives files to AppFolio's own file picker / drop zone and clicks
-AppFolio's own delete button. It finds those controls by inspecting the page.
+would: it gives files to AppFolio's own **Upload Photo** input and clicks
+AppFolio's own delete link (and its "Delete" confirmation).
 
-This has been tested end-to-end against a mock page (`test/`), **not yet
-against a live AppFolio account**. If something isn't detected on your pages:
+The **Photos** card on unit pages is recognised directly from its markup
+(`.js-attached-photos`): the photo list, the upload input, the delete link,
+and the Default / Make Default controls. The separate **Attachments**
+uploader on the same page is never touched. If the photo you replace was the
+unit's default photo, the staged one is made the default before the original
+is deleted.
+
+This is tested end-to-end against a mock page that mirrors that markup
+(`test/`), **not yet against a live AppFolio account** — in particular,
+AppFolio's upload script and confirm dialog are simulated. On pages without
+the Photos card, detection falls back to guessing. If something isn't
+detected:
 
 - Click **Copy page diagnostics** in the StagedAF panel. It copies a
   description of the page structure (tag and class names only — no names,
