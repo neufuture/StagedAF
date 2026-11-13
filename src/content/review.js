@@ -36,7 +36,7 @@
         await SAF.download(job.meta.url, originalName(job.name)).catch(() => (job.beforeBlob ? SAF.download(job.beforeBlob, originalName(job.name)) : null)).catch(() => {});
       }
       const wasDefault = !!img && A.isDefault(img);
-      const before = new Set(A.findPhotos().map(A.photoKey));
+      const before = A.snapshot();
       const closeToast = ui.toast('Uploading the staged photo to AppFolio…', { ms: 0 });
       await A.deliver(sink, [file]);
       const appeared = await A.waitForNewPhoto(before);

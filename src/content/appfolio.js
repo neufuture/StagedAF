@@ -188,7 +188,7 @@
   A.deletePhoto = async (key) => {
     const find = () => A.findPhotos().find((p) => A.photoKey(p) === key);
     const img = find();
-    if (!img) return { ok: false, reason: 'The original photo is no longer on the page.' };
+    if (!img) return { ok: false, reason: "Couldn't find the original photo on the page any more." };
     const del = A.findDelete(img);
     if (!del) return { ok: false, reason: "Couldn't find AppFolio's delete button for the original photo." };
 
@@ -305,7 +305,7 @@
     if (sink.el.multiple || files.length === 1) return giveToInput(sink.el, files);
     // A single-file input: feed it one photo at a time.
     for (const file of files) {
-      const before = new Set(A.findPhotos().map(A.photoKey));
+      const before = A.snapshot();
       if (!sink.el.isConnected) sink = (await A.findSink()) || sink;
       giveToInput(sink.el, [file]);
       await A.waitForNewPhoto(before, 20000);
@@ -314,11 +314,34 @@
 
   // Resolves with the new <img> once a photo that wasn't there before shows up
   // with a real (uploaded) URL; null on timeout. blob:/data: previews don't count.
-  A.waitForNewPhoto = async (beforeKeys, timeout = 90000) => {
+  //
+  // In AppFolio's Photos card the test is the list entry instead: a new
+  // entry with its own photo id (or simply one more entry than before),
+  // whatever its thumbnail looks like.
+  A.snapshot = () => ({
+    keys: new Set(A.findPhotos().map(A.photoKey)),
+    cards: new Set(q(AF.section + ' ' + AF.photo)),
+    ids: new Set(q(AF.section + ' ' + AF.photo).map((c) => c.getAttribute('data-photo-id')).filter(Boolean)),
+  });
+
+  A.waitForNewPhoto = async (before, timeout = 90000) => {
     const end = Date.now() + timeout;
+    let extraSince = 0;
     while (Date.now() < end) {
       await SAF.sleep(400);
-      const added = A.findPhotos().find((p) => !beforeKeys.has(A.photoKey(p)) && /^https?:/i.test(A.photoKey(p)) && p.complete && p.naturalWidth > 0);
+      if (hasPhotosCard()) {
+        const cards = q(AF.section + ' ' + AF.photo);
+        const byId = cards.find((c) => c.getAttribute('data-photo-id') && !before.ids.has(c.getAttribute('data-photo-id')));
+        if (byId) return byId.querySelector('img') || byId;
+        // No id on the new entry: accept one that has stayed put for 2 seconds.
+        const extra = cards.filter((c) => !before.cards.has(c));
+        if (extra.length && cards.length > before.cards.size) {
+          extraSince = extraSince || Date.now();
+          if (Date.now() - extraSince > 2000) return extra[extra.length - 1].querySelector('img') || extra[extra.length - 1];
+        } else extraSince = 0;
+        continue;
+      }
+      const added = A.findPhotos().find((p) => !before.keys.has(A.photoKey(p)) && /^https?:/i.test(A.photoKey(p)) && p.complete && p.naturalWidth > 0);
       if (added) return added;
     }
     return null;

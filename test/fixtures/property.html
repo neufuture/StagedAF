@@ -56,11 +56,11 @@ ul.js-attached-photos-list{list-style:none;margin:0;padding:0}.attached-photo{fl
 <script>
 window.__uploads = []; window.__deleted = []; window.__attachments = []; window.__default = null; let n = 100;
 const list = document.querySelector('.js-attached-photos-list');
-function addPhoto(id, name, uuid, isDefault){
+function addPhoto(id, name, uuid, isDefault, src){
   const li = document.createElement('li'); li.className = 'js-attached-photo attached-photo'; li.dataset.photoId = 'photo_' + id;
   li.innerHTML = `<div class="js-attached-photo-name attached-photo__name">${name}</div>
     <a class="js-attached-photo-previewable-image w-100 h-100 d-block" href="/photos/${id}?preview=true">
-      <img alt="${name}" height="106" width="160" src="https://demo.appfolio.com/images/${uuid}/original.jpg" /></a>
+      <img alt="${name}" height="106" width="160" src="${src || `https://demo.appfolio.com/images/${uuid}/original.jpg`}" /></a>
     <div class="js-attached-photo-actions attached-photo__actions">
       <span class="badge badge-success js-attached-photo-actions-default-flag ${isDefault ? '' : 'd-none'}">Default</span>
       <a class="${isDefault ? 'd-none ' : ''}js-attached-photo-actions-make-default" data-remote="true" rel="nofollow" data-method="put" href="/properties/5/units/77/change_default_photo?photo_id=${id}">Make Default</a>
@@ -91,7 +91,7 @@ document.addEventListener('click', (e) => {
 });
 function bindPhotoInput(input){
   input.addEventListener('change', () => {
-    for (const f of input.files) { window.__uploads.push({ name: f.name, size: f.size, type: f.type }); const id = ++n; setTimeout(() => addPhoto(id, f.name, 'up' + id, false), 400); }
+    for (const f of input.files) { window.__uploads.push({ name: f.name, size: f.size, type: f.type }); const id = ++n; const preview = URL.createObjectURL(f); setTimeout(() => addPhoto(id, f.name, 'up' + id, false, preview), 400); }
     // Like many upload widgets, swap the input for a fresh copy after use.
     const fresh = input.cloneNode(); input.replaceWith(fresh); bindPhotoInput(fresh);
   });
