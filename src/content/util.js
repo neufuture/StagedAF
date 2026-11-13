@@ -8,7 +8,7 @@
     try {
       fn(data);
     } catch (e) {
-      console.error('[StagedAF]', e);
+      console.error('[UnitStager]', e);
     }
   });
 
@@ -38,9 +38,9 @@
     try {
       res = await chrome.runtime.sendMessage(msg);
     } catch {
-      throw new Error('StagedAF was updated or reloaded. Refresh this page to keep using it.');
+      throw new Error('UnitStager was updated or reloaded. Refresh this page to keep using it.');
     }
-    if (!res || !res.ok) throw new Error((res && res.error) || 'StagedAF background error');
+    if (!res || !res.ok) throw new Error((res && res.error) || 'UnitStager background error');
     return res.value;
   };
 

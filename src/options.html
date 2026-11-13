@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>StagedAF settings</title>
+<title>UnitStager settings</title>
 <link rel="stylesheet" href="options.css">
 </head>
 <body>
 <main>
-  <h1>✦ StagedAF <span>Virtual staging for AppFolio</span></h1>
+  <h1>✦ UnitStager <span>Virtual staging for AppFolio</span></h1>
 
   <section>
     <h2>Image model</h2>
-    <p class="hint">StagedAF sends photos straight from your browser to the image service using your own API key. The key is stored only in this browser.</p>
+    <p class="hint">UnitStager sends photos straight from your browser to the image service using your own API key. The key is stored only in this browser.</p>
     <label>OpenAI API key
       <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
     </label>
@@ -51,20 +51,20 @@
     <label class="check"><input id="stageUploads" type="checkbox"> Stage new uploads — ask which photos to stage whenever I upload on a property or unit page</label>
     <label class="check"><input id="reviewBeforeUpload" type="checkbox"> Show me before/after before staged uploads are sent to AppFolio</label>
     <label class="check"><input id="autoReplace" type="checkbox"> Replace existing photos automatically, without a before/after review</label>
-    <label class="check"><input id="backupOriginal" type="checkbox"> Save the original to Downloads/StagedAF before replacing it</label>
+    <label class="check"><input id="backupOriginal" type="checkbox"> Save the original to Downloads/UnitStager before replacing it</label>
     <label class="check"><input id="disclosureLabel" type="checkbox"> Add a disclosure label to staged photos</label>
     <label>Label text <input id="disclosureText" type="text"></label>
   </section>
 
   <section>
     <h2>Image host access</h2>
-    <p class="hint">Only needed if staging an existing photo fails with “can't download photos from …”. Enter that host to let StagedAF read photos from it.</p>
+    <p class="hint">Only needed if staging an existing photo fails with “can't download photos from …”. Enter that host to let UnitStager read photos from it.</p>
     <div class="actions"><input id="host" type="text" placeholder="images.example-cdn.com" spellcheck="false"><button id="grant" type="button">Grant access</button><span id="grantResult" role="status"></span></div>
   </section>
 
   <section>
     <h2>AppFolio page detection</h2>
-    <p class="hint">Leave these blank to auto-detect. If Stage buttons don't appear, or replacing can't find the upload or delete control, use “Copy page diagnostics” in the StagedAF panel on that page to work out the right CSS selectors.</p>
+    <p class="hint">Leave these blank to auto-detect. If Stage buttons don't appear, or replacing can't find the upload or delete control, use “Copy page diagnostics” in the UnitStager panel on that page to work out the right CSS selectors.</p>
     <label>Pages to run on (regular expression matched against the URL path) <input id="pagePattern" type="text" spellcheck="false"></label>
     <div class="cols">
       <label>Photo selector <input id="photoSelector" type="text" spellcheck="false" placeholder="auto"></label>

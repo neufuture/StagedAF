@@ -373,7 +373,7 @@
   A.diagnostics = () => {
     const photos = A.findPhotos();
     return {
-      stagedaf: chrome.runtime.getManifest().version,
+      unitstager: chrome.runtime.getManifest().version,
       page: location.pathname.replace(/\d+/g, 'N'),
       matchesPagePattern: A.isTargetPage(),
       appfolioPhotosCard: hasPhotosCard(),

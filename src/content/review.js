@@ -29,7 +29,7 @@
       const sink = await A.findSink(img);
       if (!sink) {
         await SAF.download(job.resultBlob, file.name).catch(() => {});
-        ui.toast("Couldn't find AppFolio's photo uploader on this page. The staged photo was saved to Downloads/StagedAF so you can add it by hand.", { kind: 'error', ms: 15000 });
+        ui.toast("Couldn't find AppFolio's photo uploader on this page. The staged photo was saved to Downloads/UnitStager so you can add it by hand.", { kind: 'error', ms: 15000 });
         return false;
       }
       if (deleteOriginal && SAF.settings.backupOriginal) {
@@ -139,7 +139,7 @@
       body,
       footer: [
         h('button', { class: 'btn danger', onclick: () => (close(), SAF.discardBatch(batch)) }, 'Discard all'),
-        h('span', { class: 'muted' }, 'Close this to decide later — the batch stays in the StagedAF panel.'),
+        h('span', { class: 'muted' }, 'Close this to decide later — the batch stays in the UnitStager panel.'),
         h('span', { class: 'spacer' }),
         uploadBtn,
       ],

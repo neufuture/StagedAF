@@ -1,4 +1,4 @@
-// Runs in the page's own JavaScript world. Its only job: when StagedAF is
+// Runs in the page's own JavaScript world. Its only job: when UnitStager is
 // about to click AppFolio's delete button on the user's behalf (after the user
 // chose "Replace original"), auto-accept the native confirm() box for a few
 // seconds so the replacement can finish unattended.

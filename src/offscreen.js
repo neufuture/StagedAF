@@ -8,7 +8,7 @@
 
   async function getSettings() {
     const res = await chrome.runtime.sendMessage({ type: 'saf:get-settings' });
-    if (!res || !res.ok) throw fail('Could not load StagedAF settings.');
+    if (!res || !res.ok) throw fail('Could not load UnitStager settings.');
     return res.value;
   }
 
@@ -101,7 +101,7 @@
       }
       const err = (body && body.error) || {};
       lastError = err.message || `The image service returned HTTP ${res.status}.`;
-      if (res.status === 401) throw fail('The API key was rejected. Check it in StagedAF settings.', 'auth');
+      if (res.status === 401) throw fail('The API key was rejected. Check it in UnitStager settings.', 'auth');
       if (res.status !== 400) break;
       const param = err.param || (/(input_fidelity|output_format|quality|size)/.exec(lastError) || [])[1];
       if (param === 'size' && fields.size && fields.size !== standardSize(image.width, image.height)) {
@@ -117,7 +117,7 @@
 
   async function run(job, signal) {
     const settings = await getSettings();
-    if (!settings.apiKey) throw fail('Add your API key in StagedAF settings first.', 'auth');
+    if (!settings.apiKey) throw fail('Add your API key in UnitStager settings first.', 'auth');
     const raw = await loadSource(job.source, signal);
     const image = await SAF.normalizeImage(raw, Number(settings.maxInputEdge) || 2048);
     const dataUrl = await callImagesEdit(settings, job.prompt, image, signal);

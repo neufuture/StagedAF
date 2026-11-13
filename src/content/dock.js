@@ -1,4 +1,4 @@
-// The small StagedAF panel in the bottom-right corner: the "Stage new
+// The small UnitStager panel in the bottom-right corner: the "Stage new
 // uploads" switch, the queue, and links to settings / diagnostics.
 (() => {
   const SAF = globalThis.SAF;
@@ -42,7 +42,7 @@
     const ready = SAF.batches.filter((b) => b.state === 'ready');
     dock.className = 'dock' + (minimized ? ' min' : '');
     const head = h('div', { class: 'head', role: 'button', tabIndex: 0, 'aria-expanded': String(!minimized), onclick: () => ((minimized = !minimized), render()) },
-      h('b', null, '✦ StagedAF'), active > 0 && h('span', { class: 'count' }, String(active)), ready.length > 0 && h('span', { class: 'count', style: 'background:#059669' }, 'Review'), h('span', { class: 'caret' }, minimized ? '▲' : '▼'));
+      h('b', null, '✦ UnitStager'), active > 0 && h('span', { class: 'count' }, String(active)), ready.length > 0 && h('span', { class: 'count', style: 'background:#059669' }, 'Review'), h('span', { class: 'caret' }, minimized ? '▲' : '▼'));
     if (minimized) return dock.replaceChildren(head);
 
     const toggle = h('input', { type: 'checkbox', checked: !!SAF.settings.stageUploads, onchange: () => SAF.saveSetting('stageUploads', toggle.checked) });

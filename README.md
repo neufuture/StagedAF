@@ -1,11 +1,11 @@
-# StagedAF — virtual staging for AppFolio
+# UnitStager — virtual staging for AppFolio
 
 A Chrome / Edge extension that virtually stages listing photos inside AppFolio
 property and unit pages, using an AI image model with your own API key.
 
 ## What it does
 
-**New uploads.** Turn on **Stage new uploads** in the StagedAF panel
+**New uploads.** Turn on **Stage new uploads** in the UnitStager panel
 (bottom-right of the page). The next time you pick or drop photos into
 AppFolio's uploader, the upload is paused and you tick the photos you want
 staged (with a room type per photo, plus a style and optional instructions).
@@ -18,7 +18,7 @@ and when the result is ready choose **Replace original** (uploads the staged
 photo, then deletes the old one) or **Add, keep original**.
 
 The original is only deleted after the staged photo is confirmed on the page,
-and by default a copy of the original is saved to `Downloads/StagedAF` first.
+and by default a copy of the original is saved to `Downloads/UnitStager` first.
 
 ## Install
 
@@ -47,7 +47,7 @@ most and takes around a minute.
 |---|---|---|
 | Review before upload | on | Before/after check before staged uploads are sent |
 | Replace automatically | off | Skip the review for existing photos |
-| Save the original first | on | Backup to `Downloads/StagedAF` before a replace |
+| Save the original first | on | Backup to `Downloads/UnitStager` before a replace |
 | Disclosure label | off | Burns "Virtually staged" into a corner of the photo |
 | Default staging prompt | — | Editable; `{room}` and `{style}` are filled per photo |
 
@@ -56,7 +56,7 @@ photos to be disclosed. The label option is there for that.
 
 ## How it works with AppFolio (and its limits)
 
-AppFolio has no public API for photos, so StagedAF works the page the way you
+AppFolio has no public API for photos, so UnitStager works the page the way you
 would: it gives files to AppFolio's own **Upload Photo** input and clicks
 AppFolio's own delete link (and its "Delete" confirmation).
 
@@ -73,7 +73,7 @@ AppFolio's upload script and confirm dialog are simulated. On pages without
 the Photos card, detection falls back to guessing. If something isn't
 detected:
 
-- Click **Copy page diagnostics** in the StagedAF panel. It copies a
+- Click **Copy page diagnostics** in the UnitStager panel. It copies a
   description of the page structure (tag and class names only — no names,
   addresses or photos) that shows what was and wasn't found.
 - Settings → *AppFolio page detection* lets you set CSS selectors for the

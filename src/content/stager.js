@@ -94,7 +94,7 @@
       try {
         port = chrome.runtime.connect({ name: 'saf-stage' });
       } catch {
-        return reject(new Error('StagedAF was updated or reloaded. Refresh this page to keep using it.'));
+        return reject(new Error('UnitStager was updated or reloaded. Refresh this page to keep using it.'));
       }
       job.port = port;
       let settled = false;
@@ -124,7 +124,7 @@
 
   async function run(job) {
     const s = SAF.settings;
-    if (!s.apiKey) throw new Error('Add your API key in StagedAF settings first.');
+    if (!s.apiKey) throw new Error('Add your API key in UnitStager settings first.');
     await SAF.send({ type: 'saf:ensure-offscreen' });
     const prompt = SAF.buildPrompt({ basePrompt: s.basePrompt, room: job.room, style: job.style, custom: job.custom });
 
@@ -150,7 +150,7 @@
         try {
           host = new URL(job.source.url).host;
         } catch {}
-        throw new Error(`StagedAF can't download photos from ${host || 'this image host'}. Open StagedAF settings → "Image host access" and grant it.`);
+        throw new Error(`UnitStager can't download photos from ${host || 'this image host'}. Open UnitStager settings → "Image host access" and grant it.`);
       }
       const norm = await SAF.normalizeImage(blob, Number(s.maxInputEdge) || 2048);
       job.beforeBlob = norm.blob;

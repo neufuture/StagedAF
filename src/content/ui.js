@@ -1,4 +1,4 @@
-// All StagedAF UI lives in one shadow root so AppFolio's CSS and ours never
+// All UnitStager UI lives in one shadow root so AppFolio's CSS and ours never
 // collide. Styles use a constructable stylesheet, which a page CSP can't block.
 (() => {
   const SAF = globalThis.SAF;
@@ -120,7 +120,7 @@ canvas.thumb { display: block; max-width: 100%; height: auto; border-radius: 6px
 
   ui.root = () => {
     if (root && root.isConnected) return root;
-    const host = (ui.host = document.createElement('staged-af'));
+    const host = (ui.host = document.createElement('unit-stager'));
     host.style.cssText = 'all:initial;position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647;';
     const shadow = host.attachShadow({ mode: 'open' });
     const sheet = new CSSStyleSheet();

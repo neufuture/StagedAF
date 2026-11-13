@@ -102,7 +102,7 @@
       title: 'Stage these photos before uploading?',
       subtitle: `${images.length} photo${images.length === 1 ? '' : 's'} selected. Tick the empty rooms you want furnished; the rest upload as they are.`,
       body: [
-        !SAF.settings.apiKey && h('p', { class: 'err' }, 'Add your API key in StagedAF settings to stage photos. ', h('button', { class: 'link', onclick: () => SAF.send({ type: 'saf:open-options' }) }, 'Open settings')),
+        !SAF.settings.apiKey && h('p', { class: 'err' }, 'Add your API key in UnitStager settings to stage photos. ', h('button', { class: 'link', onclick: () => SAF.send({ type: 'saf:open-options' }) }, 'Open settings')),
         h('label', { class: 'row', style: 'margin-bottom:12px;font-weight:600;cursor:pointer' }, allBox, 'Select all'),
         h('div', { class: 'grid' }, tiles),
         h('div', { class: 'opts' }, fields.styleField, fields.customField),
@@ -171,7 +171,7 @@
     let sink = batch.sink.type === 'input' && batch.sink.el.isConnected ? batch.sink : (await A.findSink()) || (batch.sink.el.isConnected ? batch.sink : null);
     if (!sink) {
       for (const f of staged) await SAF.download(f, f.name).catch(() => {});
-      ui.toast("AppFolio's uploader is no longer on this page, so the staged photos were saved to Downloads/StagedAF. Upload them from there.", { kind: 'error', ms: 20000 });
+      ui.toast("AppFolio's uploader is no longer on this page, so the staged photos were saved to Downloads/UnitStager. Upload them from there.", { kind: 'error', ms: 20000 });
     } else {
       try {
         await A.deliver(sink, files);

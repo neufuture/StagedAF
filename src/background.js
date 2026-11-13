@@ -43,7 +43,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       reply(getSettings());
       return true;
     case 'saf:download':
-      reply(chrome.downloads.download({ url: msg.url, filename: 'StagedAF/' + safeName(msg.filename), saveAs: false }));
+      reply(chrome.downloads.download({ url: msg.url, filename: 'UnitStager/' + safeName(msg.filename), saveAs: false }));
       return true;
     case 'saf:open-options':
       reply(chrome.runtime.openOptionsPage());
