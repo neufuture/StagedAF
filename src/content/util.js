@@ -14,7 +14,7 @@
 
   SAF.settings = { ...SAF.DEFAULTS };
   SAF.loadSettings = async () => {
-    Object.assign(SAF.settings, SAF.DEFAULTS, await chrome.storage.local.get(null));
+    Object.assign(SAF.settings, SAF.merge(await chrome.storage.local.get(null)));
     SAF.emit('settings');
     return SAF.settings;
   };
@@ -28,6 +28,12 @@
     for (const [k, c] of Object.entries(changes)) SAF.settings[k] = c.newValue === undefined ? SAF.DEFAULTS[k] : c.newValue;
     SAF.emit('settings');
   });
+
+  // Is staging set up? Either signed in (account mode) or an API key (own-key mode).
+  SAF.canStage = () => (SAF.settings.mode === 'own-key' ? !!SAF.settings.apiKey : !!(SAF.settings.session && SAF.settings.session.access_token));
+  SAF.setupHint = () =>
+    SAF.settings.mode === 'own-key' ? 'Add your API key in UnitStager settings to start staging.' : 'Sign in to UnitStager to start staging. New accounts include free staged photos.';
+  SAF.openSettings = () => SAF.send({ type: 'saf:open-options' }).catch(() => {});
 
   SAF.sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

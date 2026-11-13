@@ -1,0 +1,20 @@
+// Cloudflare Worker: serves the website in ./public and the API under /api.
+// Secrets (API keys) are NOT set here — add them in the Cloudflare dashboard
+// under the Worker's Settings → Variables and Secrets. See docs/SETUP.md.
+{
+  "name": "unitstager",
+  "main": "src/index.js",
+  "compatibility_date": "2026-06-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": { "enabled": true },
+  "vars": {
+    "SITE_URL": "https://unitstager.com",
+    "OPENAI_MODEL": "gpt-image-2",
+    "OPENAI_QUALITY": "high",
+    "FREE_CREDITS": "10"
+  }
+}

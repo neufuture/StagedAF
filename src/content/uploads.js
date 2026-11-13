@@ -66,8 +66,10 @@
     const count = () => picks.filter((p) => p.on).length;
     const refresh = () => {
       const n = count();
-      stageBtn.textContent = n ? `Stage ${n} & upload` : 'Choose photos to stage';
-      stageBtn.disabled = !n || !SAF.settings.apiKey;
+      const credits = SAF.settings.mode === 'own-key' ? Infinity : Number(SAF.settings.credits ?? Infinity);
+      const short = n > credits;
+      stageBtn.textContent = !n ? 'Choose photos to stage' : short ? `Only ${credits} credit${credits === 1 ? '' : 's'} left` : `Stage ${n} & upload`;
+      stageBtn.disabled = !n || short || !SAF.canStage();
       allBox.checked = n === picks.length;
     };
 
@@ -102,7 +104,7 @@
       title: 'Stage these photos before uploading?',
       subtitle: `${images.length} photo${images.length === 1 ? '' : 's'} selected. Tick the empty rooms you want furnished; the rest upload as they are.`,
       body: [
-        !SAF.settings.apiKey && h('p', { class: 'err' }, 'Add your API key in UnitStager settings to stage photos. ', h('button', { class: 'link', onclick: () => SAF.send({ type: 'saf:open-options' }) }, 'Open settings')),
+        !SAF.canStage() && h('p', { class: 'err' }, SAF.setupHint() + ' ', h('button', { class: 'link', onclick: SAF.openSettings }, 'Open settings')),
         h('label', { class: 'row', style: 'margin-bottom:12px;font-weight:600;cursor:pointer' }, allBox, 'Select all'),
         h('div', { class: 'grid' }, tiles),
         h('div', { class: 'opts' }, fields.styleField, fields.customField),

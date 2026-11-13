@@ -33,6 +33,15 @@
     return h('div', { class: 'job', title: job.error || '' }, h('span', { class: 'dot ' + job.status }), h('span', { class: 'nm grow' }, shortName), (job.statusEl = h('span', { class: 'muted' }, statusText(job))), actions);
   }
 
+  // Account mode: the balance, with a nudge to top up when it runs low.
+  function creditsRow() {
+    const s = SAF.settings;
+    if (s.mode === 'own-key' || !SAF.canStage() || typeof s.credits !== 'number') return null;
+    const low = s.credits <= 3;
+    return h('div', { class: low ? 'warn row' : 'sect row' }, h('span', { class: 'grow' }, s.credits === 0 ? "You're out of credits." : `${s.credits} credit${s.credits === 1 ? '' : 's'} left`),
+      low && h('button', { class: 'link', onclick: SAF.openSettings }, 'Buy more'));
+  }
+
   function render() {
     if (!dock) return;
     const show = A.isTargetPage() || SAF.jobs.length > 0;
@@ -48,7 +57,8 @@
     const toggle = h('input', { type: 'checkbox', checked: !!SAF.settings.stageUploads, onchange: () => SAF.saveSetting('stageUploads', toggle.checked) });
     const parts = [
       head,
-      !SAF.settings.apiKey && h('div', { class: 'warn' }, 'Add your image API key to start staging. ', h('button', { class: 'link', onclick: () => SAF.send({ type: 'saf:open-options' }) }, 'Open settings')),
+      !SAF.canStage() && h('div', { class: 'warn' }, SAF.setupHint() + ' ', h('button', { class: 'link', onclick: SAF.openSettings }, SAF.settings.mode === 'own-key' ? 'Open settings' : 'Sign in')),
+      creditsRow(),
       h('div', { class: 'sect' }, h('label', { class: 'switch' }, toggle, 'Stage new uploads'),
         h('div', { class: 'muted', style: 'margin-top:6px' }, SAF.settings.stageUploads ? "Upload photos as usual — you'll pick which ones to stage before anything is sent." : 'Off: uploads go straight to AppFolio. Use the Stage button on any existing photo.')),
       ready.map((b) => h('div', { class: 'sect row' }, h('span', { class: 'grow' }, `${b.items.length} photos ready`), h('button', { class: 'btn small primary', onclick: () => SAF.reviewBatch(b) }, 'Review & upload'))),

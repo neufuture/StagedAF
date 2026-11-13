@@ -45,7 +45,14 @@
   ];
 
   SAF.DEFAULTS = {
-    // Image model
+    // How photos get staged: 'account' = UnitStager account with credits
+    // (through the UnitStager server); 'own-key' = straight to the image
+    // service with the user's own API key.
+    mode: 'account',
+    serverUrl: 'https://unitstager.com',
+    session: null, // {access_token, refresh_token, expires_at, email} once signed in
+    credits: null, // last known balance
+    // Image model (own-key mode only)
     apiKey: '',
     apiBase: 'https://api.openai.com/v1',
     model: 'gpt-image-2',
@@ -69,6 +76,14 @@
     uploadInputSelector: '',
     deleteSelector: '',
     minPhotoSize: 100,
+  };
+
+  // Stored settings over defaults. Installs that already had an API key from
+  // before accounts existed keep working in own-key mode.
+  SAF.merge = (stored) => {
+    const s = { ...SAF.DEFAULTS, ...stored };
+    if (!stored.mode && stored.apiKey) s.mode = 'own-key';
+    return s;
   };
 
   SAF.buildPrompt = ({ basePrompt, room, style, custom }) => {

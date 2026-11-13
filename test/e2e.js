@@ -51,7 +51,7 @@ const assert = (cond, msg) => {
       route.fulfill({ contentType: 'text/html', body: fx('property.html') });
     });
     const sw = ctx.serviceWorkers()[0] || (await ctx.waitForEvent('serviceworker'));
-    await sw.evaluate((base) => chrome.storage.local.set({ apiKey: 'sk-test', apiBase: base, backupOriginal: false, stageUploads: false }), base);
+    await sw.evaluate((base) => chrome.storage.local.set({ mode: 'own-key', apiKey: 'sk-test', apiBase: base, backupOriginal: false, stageUploads: false }), base);
 
     const page = await ctx.newPage();
     page.on('pageerror', (e) => console.log('PAGE ERROR', e.message));
@@ -137,11 +137,83 @@ const assert = (cond, msg) => {
     const diag = JSON.parse((await box.count()) ? await box.inputValue() : await page.evaluate(() => navigator.clipboard.readText()));
     assert(diag.photoCount >= 2 && /delete/i.test(diag.photos[0].deleteFound) && diag.fileInputs.length === 2 && diag.appfolioPhotosCard && diag.page === '/properties/N/units/N', 'diagnostics describe photos, delete control and file input');
 
-    const opts = await ctx.newPage();
-    await opts.goto(`chrome-extension://${new URL(sw.url()).host}/src/options.html`);
-    await opts.locator('#model').waitFor();
-    assert((await opts.locator('#model').inputValue()) === 'gpt-image-2' && (await opts.locator('#stageUploads').isChecked()), 'options page loads and reflects the dock toggle');
-    await opts.screenshot({ path: path.join(__dirname, 'out-options.png'), fullPage: true });
+    // ---- Account mode: the same extension, through the UnitStager server ----
+    console.log('Account mode (sign-in, credits, purchase)');
+    const { startMock, stripeSign } = await import('../server/test/mock-upstream.js');
+    const { serve } = await import('../server/test/serve.js');
+    const mock = await startMock({ imageBase64: fx('staged.jpg').toString('base64') });
+    const app = await serve({
+      SUPABASE_URL: mock.url, SUPABASE_PUBLISHABLE_KEY: 'pub-key', SUPABASE_SECRET_KEY: 'secret-key',
+      OPENAI_API_KEY: 'sk-server', OPENAI_BASE: mock.url + '/v1', STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_BASE: mock.url,
+      STRIPE_WEBHOOK_SECRET: 'whsec_test', SITE_URL: 'https://unitstager.com', FREE_CREDITS: '2',
+    });
+    try {
+      await sw.evaluate((url) => chrome.storage.local.set({ mode: 'account', serverUrl: url, apiKey: '', stageUploads: false }), app.url);
+      await page.locator('unit-stager .dock .warn', { hasText: 'Sign in to UnitStager' }).waitFor();
+      assert(true, 'signed out: the panel asks the user to sign in');
+
+      const opts = await ctx.newPage();
+      await opts.goto(`chrome-extension://${new URL(sw.url()).host}/src/options.html`);
+      await opts.locator('#email').fill('pm@example.com');
+      await opts.locator('#sendCode').click();
+      await opts.locator('#code').waitFor();
+      assert(mock.state.emails.join() === 'pm@example.com', 'sign-in code emailed');
+      await opts.locator('#code').fill('000000');
+      await opts.locator('#verify').click();
+      await opts.locator('#authResult.bad', { hasText: 'wrong or has expired' }).waitFor();
+      assert(true, 'wrong code is rejected with a clear message');
+      await opts.locator('#code').fill('123456');
+      await opts.locator('#verify').click();
+      await opts.locator('#signedIn').waitFor();
+      await opts.locator('#packs button').first().waitFor();
+      assert((await opts.locator('#credits').textContent()) === '2' && (await opts.locator('#who').textContent()) === 'pm@example.com', 'signed in with 2 free credits');
+      await opts.screenshot({ path: path.join(__dirname, 'out-options.png'), fullPage: true });
+
+      await page.bringToFront();
+      await page.locator('unit-stager .dock', { hasText: '2 credits left' }).waitFor();
+      const stageOne = async (n) => {
+        await page.locator('unit-stager .chip:not(.ready):not(.failed):not(.busy)').nth(n).click();
+        await page.locator('unit-stager .pop button.primary').click();
+      };
+      await stageOne(1);
+      await page.locator('unit-stager .chip.ready').waitFor({ timeout: 30000 });
+      const sent = mock.state.image.at(-1);
+      assert(sent.auth === 'Bearer sk-server' && /Do not repaint/.test(sent.prompt), "staged through the server with the server's key and prompt");
+      await page.locator('unit-stager .dock', { hasText: '1 credit left' }).waitFor();
+      assert(true, 'balance in the panel dropped to 1');
+      await stageOne(1);
+      await page.locator('unit-stager .chip.ready').nth(1).waitFor({ timeout: 30000 });
+      await page.locator('unit-stager .dock', { hasText: "You're out of credits" }).waitFor();
+      const imageCalls = mock.state.image.length;
+      await stageOne(1);
+      await page.locator('unit-stager .toast.error', { hasText: 'out of credits' }).waitFor({ timeout: 30000 });
+      assert((await page.locator('unit-stager .toast.error button', { hasText: 'Buy credits' }).count()) === 1 && mock.state.image.length === imageCalls, 'out of credits: blocked before any image call, with a Buy credits prompt');
+      await page.screenshot({ path: path.join(__dirname, 'out-credits.png') });
+
+      await opts.bringToFront();
+      await ctx.route('https://checkout.stripe.test/**', (route) => route.fulfill({ contentType: 'text/html', body: 'mock checkout' }));
+      const [checkout] = await Promise.all([ctx.waitForEvent('page'), opts.locator('#packs button').first().click()]);
+      await checkout.waitForURL(/checkout\.stripe\.test\/pay\/cs_test_1/);
+      assert(mock.state.stripe.length === 1 && mock.state.stripe[0].params.customer_email === 'pm@example.com', 'Buy opens Stripe Checkout for the signed-in user');
+      await checkout.close();
+      const session = mock.state.stripe[0];
+      const event = JSON.stringify({ type: 'checkout.session.completed', data: { object: { id: session.id, payment_status: 'paid', metadata: { user_id: session.params['metadata[user_id]'], credits: session.params['metadata[credits]'] } } } });
+      const hook = await fetch(app.url + '/api/stripe/webhook', { method: 'POST', body: event, headers: { 'Stripe-Signature': stripeSign(event, 'whsec_test') } });
+      assert(hook.status === 200, 'payment notification accepted');
+      await opts.locator('#refresh').click();
+      await opts.locator('#credits', { hasText: '25' }).waitFor();
+      await page.bringToFront();
+      await page.locator('unit-stager .dock', { hasText: '25 credits left' }).waitFor();
+      assert(true, 'purchased credits show up in settings and in the panel');
+
+      await opts.bringToFront();
+      await opts.locator('#signOut').click();
+      await opts.locator('#signedOut').waitFor();
+      assert(await sw.evaluate(async () => (await chrome.storage.local.get('session')).session === null), 'sign out clears the session');
+    } finally {
+      app.close();
+      mock.close();
+    }
     console.log('\nALL PASSED');
   } finally {
     await ctx.close();

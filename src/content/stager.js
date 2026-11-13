@@ -35,6 +35,7 @@
     if (job.status === 'running' || job.status === 'queued') return job.finished;
     job.status = 'queued';
     job.error = '';
+    job.errorCode = undefined;
     job.resultBlob = null;
     job.finished = new Promise((resolve) => (job.settle = resolve));
     SAF.emit('jobs', job);
@@ -79,7 +80,7 @@
       SAF.emit('jobs', job);
       run(job)
         .then(() => finish(job, 'done'))
-        .catch((e) => finish(job, job.cancelled ? 'cancelled' : 'error', String((e && e.message) || e)))
+        .catch((e) => ((job.errorCode = e && e.code), finish(job, job.cancelled ? 'cancelled' : 'error', String((e && e.message) || e))))
         .finally(() => {
           running--;
           job.cancelled = false;
@@ -124,9 +125,11 @@
 
   async function run(job) {
     const s = SAF.settings;
-    if (!s.apiKey) throw new Error('Add your API key in UnitStager settings first.');
+    if (!SAF.canStage()) throw Object.assign(new Error(SAF.setupHint()), { code: 'auth' });
     await SAF.send({ type: 'saf:ensure-offscreen' });
     const prompt = SAF.buildPrompt({ basePrompt: s.basePrompt, room: job.room, style: job.style, custom: job.custom });
+
+    const details = { prompt, room: job.room, style: job.style, custom: job.custom };
 
     let source;
     if (job.source.file) {
@@ -136,7 +139,7 @@
 
     let out;
     try {
-      out = await remote(job, { source, prompt, wantInput: !job.beforeBlob });
+      out = await remote(job, { ...details, source, wantInput: !job.beforeBlob });
     } catch (e) {
       if (e.code !== 'fetch-source' || !job.source.url) throw e;
       // The extension has no access to this image host; try as the page.
@@ -154,8 +157,9 @@
       }
       const norm = await SAF.normalizeImage(blob, Number(s.maxInputEdge) || 2048);
       job.beforeBlob = norm.blob;
-      out = await remote(job, { source: { dataUrl: await SAF.blobToDataUrl(norm.blob) }, prompt });
+      out = await remote(job, { ...details, source: { dataUrl: await SAF.blobToDataUrl(norm.blob) } });
     }
+    if (typeof out.credits === 'number') SAF.saveSetting('credits', out.credits);
     if (out.inputDataUrl && !job.beforeBlob) job.beforeBlob = SAF.dataUrlToBlob(out.inputDataUrl);
     let result = SAF.dataUrlToBlob(out.dataUrl);
     if (s.disclosureLabel && s.disclosureText) result = await SAF.addLabel(result, s.disclosureText);

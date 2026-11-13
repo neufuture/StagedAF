@@ -107,12 +107,13 @@
         ? [h('p', { class: 'muted' }, job.status === 'queued' ? 'Waiting for another photo to finish first.' : `Sent to the image service ${SAF.elapsed(job)} ago. This usually takes 30 seconds to 2 minutes, and is stopped automatically at 5.`), h('div', { class: 'row end' }, h('button', { class: 'btn small danger', onclick: () => (SAF.removeJob(job), closePopover(), schedule()) }, 'Cancel staging'))]
         : [
             job && job.status === 'error' && h('p', { class: 'err' }, job.error),
-            !SAF.settings.apiKey && h('p', { class: 'err' }, 'Add your API key first. ', h('button', { class: 'link', onclick: () => SAF.send({ type: 'saf:open-options' }) }, 'Open settings')),
+            !SAF.canStage() && h('p', { class: 'err' }, SAF.setupHint() + ' ', h('button', { class: 'link', onclick: SAF.openSettings }, 'Open settings')),
+            job && job.errorCode === 'no-credits' && h('p', null, h('button', { class: 'link', onclick: SAF.openSettings }, 'Buy more credits')),
             h('label', { class: 'field' }, 'Room', room),
             fields.styleField,
             fields.customField,
             h('p', { class: 'muted', style: 'margin:0 0 10px' }, 'Leave the instructions blank for default staging.'),
-            h('div', { class: 'row end' }, h('button', { class: 'btn small', onclick: closePopover }, 'Cancel'), h('button', { class: 'btn small primary', disabled: !SAF.settings.apiKey, onclick: go }, 'Stage photo')),
+            h('div', { class: 'row end' }, h('button', { class: 'btn small', onclick: closePopover }, 'Cancel'), h('button', { class: 'btn small primary', disabled: !SAF.canStage(), onclick: go }, 'Stage photo')),
           ]
     );
     ui.root().append(pop);
@@ -125,7 +126,10 @@
   SAF.existingJobDone = (job) => {
     schedule();
     if (!SAF.jobs.includes(job)) return;
-    if (job.status === 'error') return ui.toast('Staging failed: ' + job.error, { kind: 'error', ms: 12000 });
+    if (job.status === 'error') {
+      const fix = job.errorCode === 'no-credits' ? 'Buy credits' : job.errorCode === 'auth' ? 'Open settings' : null;
+      return ui.toast(fix ? job.error : 'Staging failed: ' + job.error, { kind: 'error', ms: 12000, action: fix, onAction: SAF.openSettings });
+    }
     if (job.status !== 'done') return;
     if (SAF.settings.autoReplace) return SAF.replaceExisting(job, { deleteOriginal: true });
     job.meta.closeToast = ui.toast('Staged photo is ready.', { kind: 'ok', action: 'Review', onAction: () => SAF.reviewExisting(job), ms: 15000 });

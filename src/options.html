@@ -10,40 +10,25 @@
 <main>
   <h1>✦ UnitStager <span>Virtual staging for AppFolio</span></h1>
 
-  <section>
-    <h2>Image model</h2>
-    <p class="hint">UnitStager sends photos straight from your browser to the image service using your own API key. The key is stored only in this browser.</p>
-    <label>OpenAI API key
-      <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
-    </label>
-    <div class="cols">
-      <label>Model <input id="model" type="text" spellcheck="false"></label>
-      <label>Quality
-        <select id="quality"><option value="high">High (best, slowest)</option><option value="medium">Medium</option><option value="low">Low (draft)</option><option value="auto">Auto</option></select>
-      </label>
-      <label>Keep-the-room fidelity
-        <select id="inputFidelity"><option value="high">High</option><option value="low">Low</option><option value="default">Model default</option></select>
-      </label>
+  <section id="accountSection">
+    <h2>Account</h2>
+    <div id="signedOut">
+      <p class="hint">Sign in with your email. New accounts include free staged photos — no card needed.</p>
+      <div class="actions"><input id="email" type="email" autocomplete="email" placeholder="you@company.com" aria-label="Email address"><button id="sendCode" type="button">Email me a sign-in code</button></div>
+      <div class="actions" id="codeRow" hidden><input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="Code from the email" aria-label="Sign-in code"><button id="verify" type="button">Sign in</button></div>
     </div>
-    <details>
-      <summary>Advanced</summary>
-      <div class="cols">
-        <label>API base URL <input id="apiBase" type="text" spellcheck="false"></label>
-        <label>Longest edge sent (px) <input id="maxInputEdge" type="number" min="512" max="4096" step="64"></label>
-        <label>Photos staged at once <input id="concurrency" type="number" min="1" max="4"></label>
-      </div>
-    </details>
-    <div class="actions"><button id="test" type="button">Test key</button><span id="testResult" role="status"></span></div>
+    <div id="signedIn" hidden>
+      <p class="balance"><b id="credits">–</b> <span id="creditsLabel">credits</span></p>
+      <p class="hint">Signed in as <span id="who"></span>. Each staged photo uses one credit; if staging fails the credit comes back.</p>
+      <div class="actions" id="packs"></div>
+      <div class="actions"><button id="refresh" type="button">Refresh balance</button><button id="signOut" type="button">Sign out</button></div>
+    </div>
+    <p id="authResult" role="status"></p>
   </section>
 
   <section>
     <h2>Staging</h2>
     <label>Default style <select id="style"></select></label>
-    <label>Default staging prompt
-      <textarea id="basePrompt" rows="12" spellcheck="true"></textarea>
-    </label>
-    <p class="hint"><code>{room}</code> and <code>{style}</code> are filled in per photo. Instructions typed for a specific photo are added after this prompt.</p>
-    <div class="actions"><button id="resetPrompt" type="button">Restore default prompt</button></div>
   </section>
 
   <section>
@@ -60,6 +45,37 @@
     <h2>Image host access</h2>
     <p class="hint">Only needed if staging an existing photo fails with “can't download photos from …”. Enter that host to let UnitStager read photos from it.</p>
     <div class="actions"><input id="host" type="text" placeholder="images.example-cdn.com" spellcheck="false"><button id="grant" type="button">Grant access</button><span id="grantResult" role="status"></span></div>
+  </section>
+
+  <section>
+    <h2>Advanced</h2>
+    <label>UnitStager server <input id="serverUrl" type="text" spellcheck="false"></label>
+    <label class="check"><input id="ownKeyMode" type="checkbox"> Use my own OpenAI API key instead of a UnitStager account (no credits; you pay the image service directly)</label>
+    <div id="ownKey" hidden>
+      <label>OpenAI API key
+        <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
+      </label>
+      <div class="cols">
+        <label>Model <input id="model" type="text" spellcheck="false"></label>
+        <label>Quality
+          <select id="quality"><option value="high">High (best, slowest)</option><option value="medium">Medium</option><option value="low">Low (draft)</option><option value="auto">Auto</option></select>
+        </label>
+        <label>Keep-the-room fidelity
+          <select id="inputFidelity"><option value="high">High</option><option value="low">Low</option><option value="default">Model default</option></select>
+        </label>
+      </div>
+      <div class="cols">
+        <label>API base URL <input id="apiBase" type="text" spellcheck="false"></label>
+        <label>Photos staged at once <input id="concurrency" type="number" min="1" max="4"></label>
+      </div>
+      <div class="actions"><button id="test" type="button">Test key</button><span id="testResult" role="status"></span></div>
+      <label>Staging prompt
+        <textarea id="basePrompt" rows="12" spellcheck="true"></textarea>
+      </label>
+      <p class="hint"><code>{room}</code> and <code>{style}</code> are filled in per photo. Instructions typed for a specific photo are added after this prompt.</p>
+      <div class="actions"><button id="resetPrompt" type="button">Restore default prompt</button></div>
+    </div>
+    <label>Longest edge sent (px) <input id="maxInputEdge" type="number" min="512" max="4096" step="64"></label>
   </section>
 
   <section>

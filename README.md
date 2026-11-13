@@ -20,26 +20,39 @@ photo, then deletes the old one) or **Add, keep original**.
 The original is only deleted after the staged photo is confirmed on the page,
 and by default a copy of the original is saved to `Downloads/UnitStager` first.
 
-## Install
+## How it is put together
+
+- **The extension** (this folder, `manifest.json` and `src/`) runs in the
+  browser on AppFolio pages.
+- **The server** (`server/`) handles sign-in, credits, staging and payments,
+  and serves the website. It runs on Cloudflare, with Supabase for accounts
+  and Stripe for payments. Setup is in [`docs/SETUP.md`](docs/SETUP.md).
+
+A user signs in with their email in the extension's settings and gets free
+credits. Each staged photo costs one credit; a failed staging is refunded.
+More credits are bought through Stripe Checkout.
+
+## Install (development)
 
 1. Open `chrome://extensions` (or `edge://extensions`) and switch on **Developer mode**.
 2. Click **Load unpacked** and choose this folder.
-3. The settings page opens. Paste an OpenAI API key and click **Test key**.
-4. Open a property or unit page in AppFolio.
+3. In the settings page that opens, sign in with your email.
+4. Open a unit page in AppFolio.
+
+Until the server is deployed, tick **Advanced → Use my own OpenAI API key**
+and paste a key: the extension then talks to OpenAI directly, with no account
+or credits.
 
 ## Image model
 
-The default is OpenAI's `gpt-image-2` through the image *edits* API — the same
-family of model behind image editing in ChatGPT and Copilot. Model, quality
-and API base URL are all in settings, so a different OpenAI image model, or an
-OpenAI-compatible endpoint, can be swapped in without code changes. Parameters
-a model rejects are dropped automatically.
+The server uses OpenAI's `gpt-image-2` through the image *edits* API — the
+same family of model behind image editing in ChatGPT and Copilot. The model
+and quality are server settings (`server/wrangler.jsonc`), and the staging
+prompt lives in `server/src/prompt.js`, so both can be changed without
+shipping a new extension.
 
-Photos go directly from your browser to the image service. Nothing passes
-through any other server, and the API key is stored only in this browser.
-
-Each photo is billed by the provider to your key; `high` quality costs the
-most and takes around a minute.
+Photos go from the browser to the UnitStager server and on to the image
+service. The server does not store them.
 
 ## Settings worth knowing
 
@@ -49,7 +62,6 @@ most and takes around a minute.
 | Replace automatically | off | Skip the review for existing photos |
 | Save the original first | on | Backup to `Downloads/UnitStager` before a replace |
 | Disclosure label | off | Burns "Virtually staged" into a corner of the photo |
-| Default staging prompt | — | Editable; `{room}` and `{style}` are filled per photo |
 
 Many listing services and fair-advertising rules expect virtually staged
 photos to be disclosed. The label option is there for that.
@@ -94,16 +106,34 @@ Known limits:
 
 ```
 manifest.json
-src/background.js         service worker: settings, downloads, offscreen page
-src/offscreen.js          runs the (slow) image API calls
-src/shared/               defaults, prompt building, image helpers
+src/background.js         service worker: settings, account session, downloads
+src/offscreen.js          runs the (slow) staging requests
+src/shared/               defaults, account client, image helpers
 src/content/appfolio.js   everything that touches AppFolio's page
 src/content/uploads.js    flow 1: new uploads
 src/content/existing.js   flow 2: Stage buttons on existing photos
 src/content/review.js     before/after review, replace routine
 src/content/dock.js       the corner panel
-src/options.*             settings page
-test/e2e.js               end-to-end test with a mock AppFolio page + mock API
+src/options.*             settings page (account, credits, behaviour)
+server/src/               the API: sign-in, credits, staging, Stripe
+server/public/            the website
+server/supabase/schema.sql  accounts and credits tables
+docs/SETUP.md             how to deploy the server
 ```
 
-Run the test with `node test/e2e.js` (needs Playwright with Chromium).
+## Tests
+
+```bash
+node test/e2e.js                      # extension + server in a real browser (needs Playwright)
+```
+
+```bash
+cd server && npm test                 # server API against mock Supabase / Stripe / image API
+```
+
+```bash
+bash server/test/schema.test.sh       # credit rules against a throwaway Postgres
+```
+
+All three use stand-ins for AppFolio, Supabase, Stripe and the image service;
+none of them touches the real services.
