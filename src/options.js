@@ -1,7 +1,7 @@
 (() => {
   const SAF = globalThis.SAF;
   const $ = (id) => document.getElementById(id);
-  const FIELDS = ['serverUrl', 'apiKey', 'model', 'quality', 'inputFidelity', 'apiBase', 'maxInputEdge', 'concurrency', 'style', 'basePrompt', 'stageUploads', 'reviewBeforeUpload',
+  const FIELDS = ['serverUrl', 'maxInputEdge', 'concurrency', 'style', 'stageUploads', 'reviewBeforeUpload',
     'autoReplace', 'backupOriginal', 'disclosureLabel', 'disclosureText', 'pagePattern', 'photoSelector', 'uploadInputSelector', 'deleteSelector', 'minPhotoSize'];
 
   for (const [value, label] of SAF.STYLES) $('style').append(new Option(label, value));
@@ -19,7 +19,7 @@
 
   const save = async (id) => {
     let value = read($(id));
-    if (value === '' && ['model', 'apiBase', 'basePrompt', 'pagePattern', 'disclosureText', 'serverUrl'].includes(id)) write($(id), (value = SAF.DEFAULTS[id]));
+    if (value === '' && ['pagePattern', 'disclosureText', 'serverUrl'].includes(id)) write($(id), (value = SAF.DEFAULTS[id]));
     await chrome.storage.local.set({ [id]: value });
     flash();
   };
@@ -48,34 +48,50 @@
   };
   const money = (cents) => '$' + (cents % 100 ? (cents / 100).toFixed(2) : String(cents / 100));
 
+  let packList = [];
+  let threshold = 3;
+
   function showAccount(s) {
     const signedIn = !!(s.session && s.session.access_token);
-    const ownKey = s.mode === 'own-key';
-    $('accountSection').hidden = ownKey;
-    $('ownKey').hidden = !ownKey;
-    $('ownKeyMode').checked = ownKey;
     $('signedOut').hidden = signedIn;
     $('signedIn').hidden = !signedIn;
-    if (signedIn) {
-      $('who').textContent = s.session.email || 'your account';
-      $('credits').textContent = typeof s.credits === 'number' ? s.credits : '–';
-      $('creditsLabel').textContent = s.credits === 1 ? 'credit' : 'credits';
-    }
+    if (!signedIn) return;
+    $('who').textContent = s.session.email || 'your account';
+    $('credits').textContent = typeof s.credits === 'number' ? s.credits : '–';
+    $('creditsLabel').textContent = s.credits === 1 ? 'credit' : 'credits';
+    const auto = packList.find((p) => p.id === s.autoPack);
+    $('autoRow').hidden = !!s.autoPack;
+    $('autoOn').hidden = !s.autoPack;
+    if (s.autoPack) $('autoWhat').textContent = auto ? `buys ${auto.credits} credits for ${money(auto.amount)}` : 'buys your chosen pack';
+    for (const el of document.querySelectorAll('.thr')) el.textContent = threshold;
   }
   const reshow = () => chrome.storage.local.get(null).then((stored) => showAccount(SAF.merge(stored)));
 
   function showPacks(packs) {
+    packList = packs || [];
     $('packs').replaceChildren(
-      ...(packs || []).map((p) => {
+      ...packList.map((p) => {
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = 'primary';
-        b.textContent = `Buy ${p.credits} credits – ${money(p.amount)}`;
+        b.className = 'pack';
+        const title = document.createElement('b');
+        title.textContent = `${p.credits} credits – ${money(p.amount)}`;
+        const each = document.createElement('span');
+        each.className = 'each';
+        each.textContent = `${money(p.each)} per photo`;
+        b.append(title, each);
+        if (p.save > 0) {
+          const save = document.createElement('span');
+          save.className = 'save';
+          save.textContent = `Save ${p.save}%`;
+          b.append(save);
+        }
         b.addEventListener('click', async () => {
+          const auto = !$('autoRow').hidden && $('autoBox').checked;
           say('Opening checkout…');
           try {
-            window.open(await account('checkout', { pack: p.id }), '_blank', 'noopener');
-            say('Finish paying in the new tab. Your credits appear here afterwards.');
+            window.open(await account('checkout', { pack: p.id, auto }), '_blank', 'noopener');
+            say(auto ? 'Finish paying in the new tab. Your credits appear here afterwards, and auto top-up switches on.' : 'Finish paying in the new tab. Your credits appear here afterwards.');
           } catch (e) {
             say(e.message, 'bad');
           }
@@ -88,14 +104,27 @@
   // Ask the server for the current balance and packs (also after a purchase).
   async function refreshAccount(quiet) {
     const s = SAF.merge(await chrome.storage.local.get(null));
-    if (s.mode === 'own-key' || !s.session) return;
+    if (!s.session) return;
     try {
-      showPacks((await account('me')).packs);
+      const me = await account('me');
+      threshold = (me.auto && me.auto.threshold) || threshold;
+      showPacks(me.packs);
+      await reshow();
       if (!quiet) say('');
     } catch (e) {
       if (!quiet || e.code === 'auth') say(e.message, 'bad');
     }
   }
+
+  $('autoOff').addEventListener('click', async () => {
+    try {
+      await account('autoOff');
+      $('autoBox').checked = false;
+      say('Auto top-up is off. Your card will not be charged automatically.');
+    } catch (e) {
+      say(e.message, 'bad');
+    }
+  });
 
   $('sendCode').addEventListener('click', async () => {
     const email = $('email').value.trim();
@@ -127,36 +156,10 @@
     await account('signOut');
     say('Signed out.');
   });
-  $('ownKeyMode').addEventListener('change', async () => {
-    await chrome.storage.local.set({ mode: $('ownKeyMode').checked ? 'own-key' : 'account' });
-    flash();
-  });
-  chrome.storage.onChanged.addListener((changes) => (changes.session || changes.credits || changes.mode) && reshow());
+  chrome.storage.onChanged.addListener((changes) => (changes.session || changes.credits || changes.autoPack) && reshow());
   // Coming back to this tab after paying: pick up the new balance.
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && refreshAccount(true));
   reshow().then(() => refreshAccount(true));
-
-  $('resetPrompt').addEventListener('click', () => {
-    $('basePrompt').value = SAF.DEFAULT_PROMPT;
-    save('basePrompt');
-  });
-
-  $('test').addEventListener('click', async () => {
-    const out = $('testResult');
-    out.className = '';
-    out.textContent = 'Checking…';
-    const base = ($('apiBase').value.trim() || SAF.DEFAULTS.apiBase).replace(/\/+$/, '');
-    try {
-      const res = await fetch(`${base}/models/${encodeURIComponent($('model').value.trim())}`, { headers: { Authorization: 'Bearer ' + $('apiKey').value.trim() } });
-      if (res.ok) (out.className = 'ok'), (out.textContent = 'Key works and the model is available.');
-      else if (res.status === 401) (out.className = 'bad'), (out.textContent = 'That key was rejected.');
-      else if (res.status === 404) (out.className = 'bad'), (out.textContent = 'Key works, but this account cannot use that model. Check the model name, or verify your organization with the provider.');
-      else (out.className = 'bad'), (out.textContent = `Unexpected response (HTTP ${res.status}).`);
-    } catch {
-      out.className = 'bad';
-      out.textContent = 'Could not reach the API. Check the base URL.';
-    }
-  });
 
   $('grant').addEventListener('click', async () => {
     const out = $('grantResult');

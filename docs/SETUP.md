@@ -121,21 +121,32 @@ If something fails, the Worker's **Logs** tab in Cloudflare shows why.
 - [ ] Connect a real email service in Supabase (step 2).
 - [ ] Fill in the bracketed placeholders in `server/public/privacy.html` and
       have the page reviewed.
-- [ ] Set real prices (below).
 - [ ] Publish the extension to the Chrome Web Store, then put its link in
       `INSTALL_URL` at the top of `server/public/site.js`.
 
 ## Day-to-day
 
 **Changing prices or free credits.** These live in `server/wrangler.jsonc`
-under `vars`. Free sign-up credits are `FREE_CREDITS`. To change the packs,
-add a `PACKS` entry (amounts are in cents):
+under `vars`. Free sign-up credits are `FREE_CREDITS`. The packs default to
+25 for $19, 50 for $34 and 100 for $59; to change them, add a `PACKS` entry
+(amounts are in cents). The "Save n%" labels are worked out automatically.
 
 ```jsonc
-"PACKS": "[{\"id\":\"pack25\",\"name\":\"25 staged photos\",\"credits\":25,\"amount\":1900},{\"id\":\"pack100\",\"name\":\"100 staged photos\",\"credits\":100,\"amount\":5900}]"
+"PACKS": "[{\"id\":\"pack25\",\"name\":\"25 staged photos\",\"credits\":25,\"amount\":1900},{\"id\":\"pack50\",\"name\":\"50 staged photos\",\"credits\":50,\"amount\":3400},{\"id\":\"pack100\",\"name\":\"100 staged photos\",\"credits\":100,\"amount\":5900}]"
 ```
 
-The prices currently in the code are placeholders.
+**After a server update that changes the database.** Run
+`server/supabase/schema.sql` again in the Supabase SQL Editor. It is written
+to be run repeatedly and never removes data.
+
+**Auto top-up.** A customer turns it on by ticking the box when buying a
+pack; Stripe saves their card. When their balance falls to 3 credits the
+server charges that card for the same pack and adds the credits. A declined
+card switches it off. To see who has it on:
+
+```sql
+select email, credits, auto_pack from accounts where auto_pack is not null;
+```
 
 **Giving someone free credits** (Supabase → SQL Editor):
 

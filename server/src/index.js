@@ -6,20 +6,19 @@
 //   GET  /api/me                                     -> email, credits, packs
 //   GET  /api/packs                                  -> packs (public, for the website)
 //   POST /api/stage          multipart photo         -> staged photo (costs 1 credit)
-//   POST /api/checkout       {pack}                  -> Stripe Checkout URL
+//   POST /api/checkout       {pack, auto?}           -> Stripe Checkout URL
+//   POST /api/auto-topup     {enabled:false}         turn auto top-up off
 //   POST /api/stripe/webhook                         Stripe -> add purchased credits
 //
 // Everything else is the static website in ./public.
 import { CORS, HttpError, json, readJson } from './http.js';
 import { stage } from './stage.js';
-import { createCheckout, packs, webhook } from './stripe.js';
-import { ensureAccount, refreshSession, requireUser, sendCode, verifyCode } from './supabase.js';
+import { AUTO_THRESHOLD, createCheckout, publicPacks, webhook } from './stripe.js';
+import { ensureAccount, getAccount, refreshSession, requireUser, sendCode, setAutoTopup, verifyCode } from './supabase.js';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-const publicPacks = (env) => packs(env).map(({ id, name, credits, amount }) => ({ id, name, credits, amount }));
-
-async function api(request, env, path) {
+async function api(request, env, path, ctx) {
   const route = request.method + ' ' + path;
   switch (route) {
     case 'POST /api/auth/start': {
@@ -44,15 +43,27 @@ async function api(request, env, path) {
     }
     case 'GET /api/me': {
       const user = await requireUser(env, request);
-      return json({ email: user.email, credits: await ensureAccount(env, user), packs: publicPacks(env) });
+      const credits = await ensureAccount(env, user);
+      // Tolerate a database that has not had the latest schema.sql run yet.
+      const account = (await getAccount(env, user.id).catch(() => null)) || {};
+      return json({ email: user.email, credits, packs: publicPacks(env), auto: { pack: account.auto_pack || null, threshold: AUTO_THRESHOLD } });
     }
     case 'GET /api/packs':
-      return json({ packs: publicPacks(env), free_credits: Number(env.FREE_CREDITS ?? 10) || 0 });
+      return json({ packs: publicPacks(env), free_credits: Number(env.FREE_CREDITS ?? 10) || 0, auto_threshold: AUTO_THRESHOLD });
     case 'POST /api/stage':
-      return stage(request, env, await requireUser(env, request));
+      return stage(request, env, await requireUser(env, request), ctx);
     case 'POST /api/checkout': {
       const user = await requireUser(env, request);
-      return createCheckout(request, env, user, String((await readJson(request)).pack || ''));
+      const body = await readJson(request);
+      return createCheckout(request, env, user, String(body.pack || ''), body.auto === true);
+    }
+    case 'POST /api/auto-topup': {
+      // Turning it ON happens by buying a pack with the box ticked (that is
+      // when the card is saved); this endpoint only turns it off.
+      const user = await requireUser(env, request);
+      if ((await readJson(request)).enabled !== false) throw new HttpError(400, 'Buy a pack with auto top-up ticked to turn it on.');
+      await setAutoTopup(env, user.id, null);
+      return json({ auto: { pack: null, threshold: AUTO_THRESHOLD } });
     }
     case 'POST /api/stripe/webhook':
       return webhook(request, env);
@@ -61,12 +72,12 @@ async function api(request, env, path) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const { pathname } = new URL(request.url);
     if (!pathname.startsWith('/api/')) return env.ASSETS ? env.ASSETS.fetch(request) : new Response('Not found', { status: 404 });
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     try {
-      return await api(request, env, pathname.replace(/\/+$/, ''));
+      return await api(request, env, pathname.replace(/\/+$/, ''), ctx);
     } catch (e) {
       if (e instanceof HttpError) return json({ error: e.message, code: e.code }, e.status);
       console.error('unhandled', e && e.stack);

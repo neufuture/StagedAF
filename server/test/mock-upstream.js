@@ -11,6 +11,10 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
     refs: new Set(),
     ledger: [],
     stripe: [], // checkout sessions created
+    auto: new Map(), // user id -> {customer, pack, lastAt}
+    charges: [], // off-session payment intents (auto top-up)
+    declineCharge: false,
+    noCard: false,
     image: [], // image API calls
     failImage: 0, // make the next N image calls fail with HTTP 500
     declineImage: 0, // ...or be declined by moderation
@@ -38,6 +42,23 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
       state.accounts.set(p_user, c - 1);
       state.ledger.push({ user: p_user, delta: -1, reason: 'stage', ref: p_ref });
       return c - 1;
+    },
+    get_account({ p_user }) {
+      const a = state.auto.get(p_user) || {};
+      return { credits: state.accounts.get(p_user) ?? 0, auto_pack: a.pack || null, has_card: !!a.customer, stripe_customer: a.customer || null };
+    },
+    set_auto_topup({ p_user, p_pack, p_customer }) {
+      const a = state.auto.get(p_user) || {};
+      state.auto.set(p_user, { ...a, pack: p_pack, customer: p_customer || a.customer || null });
+      return null;
+    },
+    claim_auto_topup({ p_user, p_threshold, p_min_seconds }) {
+      const a = state.auto.get(p_user);
+      const credits = state.accounts.get(p_user) ?? 0;
+      if (!a || !a.pack || !a.customer || credits > p_threshold) return null;
+      if (a.lastAt && Date.now() - a.lastAt < p_min_seconds * 1000) return null;
+      a.lastAt = Date.now();
+      return { pack: a.pack, customer: a.customer, stamp: a.lastAt };
     },
     add_credits({ p_user, p_amount, p_reason, p_ref }) {
       if (!state.refs.has(p_ref)) {
@@ -86,6 +107,19 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
         const id = 'cs_test_' + (state.stripe.length + 1);
         state.stripe.push({ id, auth: req.headers.authorization, params });
         return send(200, { id, url: 'https://checkout.stripe.test/pay/' + id });
+      }
+      if (/^\/v1\/customers\/[^/]+\/payment_methods$/.test(p)) {
+        return send(200, { data: state.noCard ? [] : [{ id: 'pm_card_1', type: 'card' }] });
+      }
+      if (p === '/v1/payment_intents') {
+        const params = Object.fromEntries(new URLSearchParams(raw.toString()));
+        const key = req.headers['idempotency-key'];
+        const seen = state.charges.find((c) => c.key === key);
+        if (seen) return send(200, { id: seen.id, status: 'succeeded' }); // Stripe replays the first answer
+        if (state.declineCharge) return send(402, { error: { code: 'card_declined', message: 'Your card was declined.' } });
+        const id = 'pi_test_' + (state.charges.length + 1);
+        state.charges.push({ id, key, params });
+        return send(200, { id, status: 'succeeded' });
       }
       if (p === '/v1/images/edits') {
         const text = raw.toString('latin1');

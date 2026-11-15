@@ -127,9 +127,7 @@
     const s = SAF.settings;
     if (!SAF.canStage()) throw Object.assign(new Error(SAF.setupHint()), { code: 'auth' });
     await SAF.send({ type: 'saf:ensure-offscreen' });
-    const prompt = SAF.buildPrompt({ basePrompt: s.basePrompt, room: job.room, style: job.style, custom: job.custom });
-
-    const details = { prompt, room: job.room, style: job.style, custom: job.custom };
+    const details = { room: job.room, style: job.style, custom: job.custom };
 
     let source;
     if (job.source.file) {
@@ -159,7 +157,11 @@
       job.beforeBlob = norm.blob;
       out = await remote(job, { ...details, source: { dataUrl: await SAF.blobToDataUrl(norm.blob) } });
     }
-    if (typeof out.credits === 'number') SAF.saveSetting('credits', out.credits);
+    if (typeof out.credits === 'number') {
+      SAF.saveSetting('credits', out.credits);
+      // Auto top-up buys more in the background when low; pick up the new balance shortly.
+      if (s.autoPack && out.credits <= 3) setTimeout(() => SAF.send({ type: 'saf:account', op: 'me' }).catch(() => {}), 8000);
+    }
     if (out.inputDataUrl && !job.beforeBlob) job.beforeBlob = SAF.dataUrlToBlob(out.inputDataUrl);
     let result = SAF.dataUrlToBlob(out.dataUrl);
     if (s.disclosureLabel && s.disclosureText) result = await SAF.addLabel(result, s.disclosureText);

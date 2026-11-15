@@ -24,11 +24,18 @@ const ASSETS = {
 };
 
 export async function serve(env, port = 0) {
+  const background = new Set(); // work the Worker asked to finish after replying
+  const ctx = {
+    waitUntil(p) {
+      const tracked = Promise.resolve(p).catch(() => {}).finally(() => background.delete(tracked));
+      background.add(tracked);
+    },
+  };
   const server = http.createServer(async (req, res) => {
     try {
       const hasBody = !['GET', 'HEAD'].includes(req.method);
       const request = new Request(`http://${req.headers.host}${req.url}`, { method: req.method, headers: req.headers, body: hasBody ? Readable.toWeb(req) : undefined, duplex: 'half' });
-      const response = await worker.fetch(request, { ASSETS, ...env });
+      const response = await worker.fetch(request, { ASSETS, ...env }, ctx);
       res.writeHead(response.status, Object.fromEntries(response.headers));
       if (response.body) Readable.fromWeb(response.body).pipe(res);
       else res.end();
@@ -38,7 +45,7 @@ export async function serve(env, port = 0) {
     }
   });
   await new Promise((r) => server.listen(port, '127.0.0.1', r));
-  return { url: `http://127.0.0.1:${server.address().port}`, close: () => server.close() };
+  return { url: `http://127.0.0.1:${server.address().port}`, close: () => server.close(), idle: () => Promise.all([...background]) };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

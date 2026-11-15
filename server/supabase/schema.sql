@@ -9,12 +9,18 @@ create table if not exists public.accounts (
   created_at timestamptz not null default now()
 );
 
+-- Auto top-up: the Stripe customer whose saved card may be charged, which pack
+-- to buy (null = off), and when it last fired (so it cannot fire twice at once).
+alter table public.accounts add column if not exists stripe_customer text;
+alter table public.accounts add column if not exists auto_pack text;
+alter table public.accounts add column if not exists auto_last_at timestamptz;
+
 -- Every change to a balance, for support questions and bookkeeping.
 create table if not exists public.credit_ledger (
   id         bigint generated always as identity primary key,
   user_id    uuid not null references public.accounts (user_id) on delete cascade,
   delta      integer not null,
-  reason     text not null,          -- signup | stage | refund | purchase | manual
+  reason     text not null,          -- signup | stage | refund | purchase | auto-topup | manual
   ref        text unique,            -- makes each grant / charge apply at most once
   created_at timestamptz not null default now()
 );
@@ -66,6 +72,41 @@ begin
   end if;
   return v;
 end $$;
+
+-- Balance and auto top-up state for one account.
+create or replace function public.get_account(p_user uuid)
+returns json language sql security definer set search_path = public as $$
+  select json_build_object('credits', credits, 'auto_pack', auto_pack, 'has_card', stripe_customer is not null, 'stripe_customer', stripe_customer)
+  from accounts where user_id = p_user;
+$$;
+
+-- Turn auto top-up on (p_pack = a pack id) or off (p_pack = null). A customer
+-- id, when given, is remembered; passing null keeps the one already stored.
+create or replace function public.set_auto_topup(p_user uuid, p_pack text, p_customer text)
+returns void language sql security definer set search_path = public as $$
+  update accounts set auto_pack = p_pack, stripe_customer = coalesce(p_customer, stripe_customer) where user_id = p_user;
+$$;
+
+-- Decide whether an auto top-up should fire now. Returns the pack and customer
+-- to charge, or null. Atomic: of any number of simultaneous calls, at most one
+-- gets a non-null answer, and not again until p_min_seconds have passed.
+create or replace function public.claim_auto_topup(p_user uuid, p_threshold integer, p_min_seconds integer)
+returns json language plpgsql security definer set search_path = public as $$
+declare v json;
+begin
+  update accounts set auto_last_at = now()
+  where user_id = p_user and auto_pack is not null and stripe_customer is not null and credits <= p_threshold
+    and (auto_last_at is null or auto_last_at < now() - make_interval(secs => p_min_seconds))
+  returning json_build_object('pack', auto_pack, 'customer', stripe_customer, 'stamp', (extract(epoch from auto_last_at) * 1000)::bigint) into v;
+  return v;
+end $$;
+
+revoke all on function public.get_account(uuid) from public, anon, authenticated;
+revoke all on function public.set_auto_topup(uuid, text, text) from public, anon, authenticated;
+revoke all on function public.claim_auto_topup(uuid, integer, integer) from public, anon, authenticated;
+grant execute on function public.get_account(uuid) to service_role;
+grant execute on function public.set_auto_topup(uuid, text, text) to service_role;
+grant execute on function public.claim_auto_topup(uuid, integer, integer) to service_role;
 
 revoke all on function public.ensure_account(uuid, text, integer) from public, anon, authenticated;
 revoke all on function public.spend_credit(uuid, text) from public, anon, authenticated;

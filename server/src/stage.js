@@ -1,6 +1,7 @@
 // POST /api/stage — spend one credit, stage one photo, refund on failure.
 import { CORS, HttpError, requireEnv } from './http.js';
 import { buildPrompt } from './prompt.js';
+import { maybeAutoTopUp } from './stripe.js';
 import { addCredits, spendCredit } from './supabase.js';
 
 const MAX_BYTES = 12 * 1024 * 1024;
@@ -70,7 +71,7 @@ async function callImageModel(env, { image, prompt, width, height }) {
   return { ok: false, ...last };
 }
 
-export async function stage(request, env, user) {
+export async function stage(request, env, user, ctx) {
   requireEnv(env, 'OPENAI_API_KEY');
   let form;
   try {
@@ -110,6 +111,10 @@ export async function stage(request, env, user) {
       declined ? 'declined' : 'upstream'
     );
   }
+  // Low balance with auto top-up on? Buy more in the background, after replying.
+  const topUp = maybeAutoTopUp(env, user, credits);
+  if (ctx && ctx.waitUntil) ctx.waitUntil(topUp);
+
   // Pass the image service's response straight through (it can be several
   // megabytes); the remaining balance rides along in a header.
   return new Response(out.res.body, { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Credits': String(credits), ...CORS } });

@@ -17,24 +17,26 @@ if (pricing) {
   fetch('/api/packs')
     .then((r) => r.json())
     .then(({ packs, free_credits }) => {
+      const el = (tag, cls, text) => {
+        const node = document.createElement(tag);
+        if (cls) node.className = cls;
+        if (text != null) node.textContent = text;
+        return node;
+      };
       const cards = [];
-      if (free_credits > 0) cards.push(['Try it', 'Free', `${free_credits} staged photos when you sign up. No card needed.`]);
-      for (const p of packs) cards.push([`${p.credits} photos`, money(p.amount), `${money(Math.round(p.amount / p.credits))} per staged photo. Credits don't expire.`]);
-      pricing.replaceChildren(
-        ...cards.map(([title, price, text]) => {
-          const el = document.createElement('div');
-          el.className = 'card';
-          const h = document.createElement('h3');
-          h.textContent = title;
-          const pr = document.createElement('div');
-          pr.className = 'price';
-          pr.textContent = price;
-          const p = document.createElement('p');
-          p.textContent = text;
-          el.append(h, pr, p);
-          return el;
-        })
-      );
+      if (free_credits > 0) {
+        const card = el('div', 'card');
+        card.append(el('h3', '', 'Try it'), el('div', 'price', 'Free'), el('p', '', `${free_credits} staged photos when you sign up. No card needed.`));
+        cards.push(card);
+      }
+      for (const p of packs) {
+        const card = el('div', 'card');
+        if (p.save > 0) card.append(el('div', 'save', `Save ${p.save}%`));
+        card.append(el('h3', '', `${p.credits} photos`), el('div', 'price', money(p.amount)), el('p', '', `${money(p.each)} per staged photo.`), el('p', '', "Credits don't expire."));
+        cards.push(card);
+      }
+      pricing.replaceChildren(...cards);
+      pricing.style.gridTemplateColumns = `repeat(auto-fit, minmax(${cards.length > 3 ? 200 : 240}px, 1fr))`;
     })
     .catch(() => {});
 }

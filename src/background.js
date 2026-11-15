@@ -49,7 +49,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     case 'saf:get-auth':
       reply(SAF.account.auth());
       return true;
-    case 'saf:account': // {op: start|verify|me|checkout|signOut, args}
+    case 'saf:account': // {op: start|verify|me|checkout|autoOff|signOut, args}
       reply(typeof SAF.account[msg.op] === 'function' && msg.op !== 'auth' ? SAF.account[msg.op](msg.args || {}) : Promise.reject(new Error('Unknown account operation')));
       return true;
     case 'saf:open-options':

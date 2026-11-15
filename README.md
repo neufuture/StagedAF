@@ -1,7 +1,7 @@
 # UnitStager — virtual staging for AppFolio
 
 A Chrome / Edge extension that virtually stages listing photos inside AppFolio
-property and unit pages, using an AI image model with your own API key.
+property and unit pages. Users sign in with an email and pay per staged photo.
 
 ## What it does
 
@@ -30,7 +30,9 @@ and by default a copy of the original is saved to `Downloads/UnitStager` first.
 
 A user signs in with their email in the extension's settings and gets free
 credits. Each staged photo costs one credit; a failed staging is refunded.
-More credits are bought through Stripe Checkout.
+More credits are bought through Stripe Checkout, in packs of 25, 50 or 100.
+With auto top-up switched on, the saved card is charged for the chosen pack
+again whenever the balance falls to 3 credits.
 
 ## Install (development)
 
@@ -38,10 +40,6 @@ More credits are bought through Stripe Checkout.
 2. Click **Load unpacked** and choose this folder.
 3. In the settings page that opens, sign in with your email.
 4. Open a unit page in AppFolio.
-
-Until the server is deployed, tick **Advanced → Use my own OpenAI API key**
-and paste a key: the extension then talks to OpenAI directly, with no account
-or credits.
 
 ## Image model
 

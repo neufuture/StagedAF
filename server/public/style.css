@@ -1,10 +1,7 @@
 :root {
-  color-scheme: light dark;
-  --bg: #fbfaf7; --card: #ffffff; --text: #1c1b19; --muted: #66625b; --line: #e6e2d9;
-  --accent: #4f46e5; --accent-text: #ffffff; --soft: #eeecfd;
-}
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #14151a; --card: #1d1f27; --text: #f1f0ec; --muted: #a29f97; --line: #30323c; --accent: #8b85ff; --accent-text: #14151a; --soft: #25264a; }
+  color-scheme: light;
+  --bg: #ffffff; --card: #ffffff; --text: #16171a; --muted: #5d6068; --line: #e6e7ea;
+  --accent: #4f46e5; --accent-text: #ffffff; --soft: #f1f0fe; --good: #047857; --good-bg: #d1fae5;
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -38,3 +35,9 @@ footer a { color: var(--muted); }
 .prose h1 { font-size: 34px; margin: 16px 0; }
 .prose h2 { font-size: 21px; margin: 28px 0 8px; }
 .note { background: var(--soft); border-radius: 10px; padding: 12px 16px; font-size: 15px; }
+figure.example { margin: 0 0 8px; }
+figure.example img { display: block; width: 100%; height: auto; border-radius: 16px; border: 1px solid var(--line); box-shadow: 0 18px 50px rgba(22, 23, 26, 0.12); }
+figure.example figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; text-align: center; }
+.card.pick { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.save { display: inline-block; font-size: 13px; font-weight: 700; color: var(--good); background: var(--good-bg); border-radius: 999px; padding: 2px 10px; margin-bottom: 8px; }
+.card p + p { margin-top: 6px; }

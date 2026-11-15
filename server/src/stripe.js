@@ -1,14 +1,18 @@
 // Stripe: selling credit packs through Checkout, and the webhook that adds
 // the credits once a payment has gone through.
 import { HttpError, json, requireEnv } from './http.js';
-import { addCredits } from './supabase.js';
+import { addCredits, claimAutoTopup, getAccount, setAutoTopup } from './supabase.js';
 
-// PLACEHOLDER PRICING — set real packs with the PACKS variable (JSON, same shape).
-// `amount` is in cents.
+// Credit packs. `amount` is in cents. Override with the PACKS variable (JSON, same shape).
 const DEFAULT_PACKS = [
   { id: 'pack25', name: '25 staged photos', credits: 25, amount: 1900 },
+  { id: 'pack50', name: '50 staged photos', credits: 50, amount: 3400 },
   { id: 'pack100', name: '100 staged photos', credits: 100, amount: 5900 },
 ];
+
+// Auto top-up buys the chosen pack again when the balance falls to this.
+export const AUTO_THRESHOLD = 3;
+const AUTO_MIN_SECONDS = 600;
 
 export function packs(env) {
   try {
@@ -18,14 +22,38 @@ export function packs(env) {
   return DEFAULT_PACKS;
 }
 
-const siteUrl = (env, request) => String(env.SITE_URL || new URL(request.url).origin).replace(/\/+$/, '');
+// What the website and extension show: each pack with its per-photo price and
+// the saving compared with the dearest per-photo price on offer.
+export function publicPacks(env) {
+  const list = packs(env);
+  const dearest = Math.max(...list.map((p) => p.amount / p.credits));
+  return list.map(({ id, name, credits, amount }) => ({ id, name, credits, amount, each: Math.round(amount / credits), save: Math.round((1 - amount / credits / dearest) * 100) }));
+}
 
-export async function createCheckout(request, env, user, packId) {
+const siteUrl = (env, request) => String(env.SITE_URL || new URL(request.url).origin).replace(/\/+$/, '');
+const stripeBase = (env) => String(env.STRIPE_BASE || 'https://api.stripe.com').replace(/\/+$/, '');
+
+async function stripe(env, path, { params, idempotencyKey } = {}) {
+  const res = await fetch(stripeBase(env) + path, {
+    method: params ? 'POST' : 'GET',
+    headers: {
+      Authorization: 'Bearer ' + String(env.STRIPE_SECRET_KEY).trim(),
+      ...(params ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+    },
+    body: params ? new URLSearchParams(params) : undefined,
+  });
+  return { res, data: await res.json().catch(() => null) };
+}
+
+// Start a purchase. With `auto`, the card is also saved (Stripe shows the
+// customer a notice) so the same pack can be bought again automatically.
+export async function createCheckout(request, env, user, packId, auto) {
   requireEnv(env, 'STRIPE_SECRET_KEY');
   const pack = packs(env).find((p) => p.id === packId);
   if (!pack) throw new HttpError(400, 'Unknown credit pack.');
   const site = siteUrl(env, request);
-  const params = new URLSearchParams({
+  const params = {
     mode: 'payment',
     client_reference_id: user.id,
     success_url: site + '/thanks.html',
@@ -37,19 +65,65 @@ export async function createCheckout(request, env, user, packId) {
     'line_items[0][price_data][currency]': 'usd',
     'line_items[0][price_data][unit_amount]': String(pack.amount),
     'line_items[0][price_data][product_data][name]': 'UnitStager – ' + (pack.name || pack.credits + ' credits'),
-  });
-  if (user.email) params.set('customer_email', user.email);
-  const res = await fetch(String(env.STRIPE_BASE || 'https://api.stripe.com').replace(/\/+$/, '') + '/v1/checkout/sessions', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + env.STRIPE_SECRET_KEY, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params,
-  });
-  const data = await res.json().catch(() => null);
+  };
+  const account = auto ? await getAccount(env, user.id) : null;
+  if (account && account.stripe_customer) params.customer = account.stripe_customer;
+  else if (user.email) params.customer_email = user.email;
+  if (auto) {
+    params['metadata[auto_pack]'] = pack.id;
+    params['payment_intent_data[setup_future_usage]'] = 'off_session';
+    if (!params.customer) params.customer_creation = 'always';
+  }
+  const { res, data } = await stripe(env, '/v1/checkout/sessions', { params });
   if (!res.ok || !data || !data.url) {
     console.error('stripe checkout failed', res.status, data && data.error && data.error.message);
     throw new HttpError(502, 'Could not start checkout. Try again shortly.', 'stripe');
   }
   return json({ url: data.url });
+}
+
+// Called after a staging: if the balance is low and auto top-up is on, charge
+// the saved card for the chosen pack and add the credits. Never throws.
+export async function maybeAutoTopUp(env, user, credits) {
+  try {
+    if (!(credits <= AUTO_THRESHOLD) || !env.STRIPE_SECRET_KEY) return;
+    const claim = await claimAutoTopup(env, user.id, AUTO_THRESHOLD, AUTO_MIN_SECONDS);
+    if (!claim) return;
+    const off = (why) => (console.error('auto top-up turned off:', why, user.id), setAutoTopup(env, user.id, null));
+    const pack = packs(env).find((p) => p.id === claim.pack);
+    if (!pack) return await off('pack no longer exists');
+
+    const cards = await stripe(env, `/v1/customers/${encodeURIComponent(claim.customer)}/payment_methods?type=card&limit=1`);
+    const card = cards.res.ok && cards.data && cards.data.data && cards.data.data[0];
+    if (!card) return cards.res.ok ? await off('no saved card') : console.error('auto top-up: could not list cards', cards.res.status);
+
+    const params = {
+      amount: String(pack.amount),
+      currency: 'usd',
+      customer: claim.customer,
+      payment_method: card.id,
+      off_session: 'true',
+      confirm: 'true',
+      description: 'UnitStager auto top-up – ' + (pack.name || pack.credits + ' credits'),
+      'metadata[user_id]': user.id,
+      'metadata[credits]': String(pack.credits),
+      'metadata[pack]': pack.id,
+      'metadata[kind]': 'auto-topup',
+    };
+    if (user.email) params.receipt_email = user.email;
+    // The key ties this charge to this one claim, so a retry can never charge twice.
+    const { res, data } = await stripe(env, '/v1/payment_intents', { params, idempotencyKey: `auto-${user.id}-${claim.stamp}` });
+    if (res.ok && data && data.status === 'succeeded') {
+      await addCredits(env, user.id, pack.credits, 'auto-topup', 'stripe:' + data.id);
+    } else if (res.status === 402 || (res.ok && data && data.status !== 'processing')) {
+      // Declined, or the bank wants the customer present: stop trying until they buy again.
+      await off((data && data.error && data.error.code) || (data && data.status) || 'declined');
+    } else {
+      console.error('auto top-up: charge did not complete', res.status, data && data.error && data.error.message);
+    }
+  } catch (e) {
+    console.error('auto top-up failed', e && e.message);
+  }
 }
 
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -99,6 +173,8 @@ export async function webhook(request, env) {
       // Keyed on the Stripe session id, so Stripe retrying the webhook can never add credits twice.
       // If this fails the error makes Stripe retry later.
       await addCredits(env, meta.user_id, credits, 'purchase', 'stripe:' + session.id);
+      // Bought with "auto top-up" ticked: the card was saved, so switch it on.
+      if (meta.auto_pack && session.customer) await setAutoTopup(env, meta.user_id, meta.auto_pack, String(session.customer));
     }
   }
   return json({ received: true });

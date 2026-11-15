@@ -40,7 +40,20 @@ q -c "update accounts set credits=3 where user_id='$U'"
 for i in $(seq 1 10); do q -c "select spend_credit('$U','race:$i')" > "$dir/r$i" & done; wait
 check "10 simultaneous spends on 3 credits: 3 succeed" "$(cat "$dir"/r* | grep -vc -- '-1')" 3
 check "…and the balance ends at 0"                   "$(q -c "select credits from accounts where user_id='$U'")" 0
-check "browser roles cannot call spend_credit"       "$(q -c "select has_function_privilege('authenticated','spend_credit(uuid,text)','execute') or has_function_privilege('anon','add_credits(uuid,integer,text,text)','execute')")" f
+# Auto top-up claims.
+q -c "update accounts set credits=10 where user_id='$U'"
+check "auto top-up is off by default"                "$(q -c "select claim_auto_topup('$U',3,600) is null")" t
+q -c "select set_auto_topup('$U','pack50','cus_1')"
+check "on, but balance above threshold: no claim"    "$(q -c "select claim_auto_topup('$U',3,600) is null")" t
+q -c "update accounts set credits=3 where user_id='$U'"
+for i in $(seq 1 10); do q -c "select claim_auto_topup('$U',3,600) is not null" > "$dir/c$i" & done; wait
+check "10 simultaneous claims: exactly 1 wins"       "$(cat "$dir"/c* | grep -c t)" 1
+q -c "update accounts set auto_last_at=null where user_id='$U'"
+check "…and it names the pack and customer"          "$(q -c "select c->>'pack' || '/' || (c->>'customer') from claim_auto_topup('$U',3,600) c")" "pack50/cus_1"
+check "inside the cool-down: no claim"               "$(q -c "select claim_auto_topup('$U',3,600) is null")" t
+q -c "select set_auto_topup('$U',null,null)"
+check "turning it off keeps the customer on file"    "$(q -c "select (get_account('$U')->>'auto_pack') is null and get_account('$U')->>'stripe_customer' = 'cus_1'")" t
+check "browser roles cannot call spend_credit"       "$(q -c "select has_function_privilege('authenticated','spend_credit(uuid,text)','execute') or has_function_privilege('anon','add_credits(uuid,integer,text,text)','execute') or has_function_privilege('anon','claim_auto_topup(uuid,integer,integer)','execute') or has_function_privilege('authenticated','set_auto_topup(uuid,text,text)','execute') or has_function_privilege('anon','get_account(uuid)','execute')")" f
 check "server role can"                              "$(q -c "select has_function_privilege('service_role','add_credits(uuid,integer,text,text)','execute')")" t
 check "row level security is on"                     "$(q -c "select bool_and(relrowsecurity) from pg_class where relname in ('accounts','credit_ledger')")" t
 [ $fail = 0 ] && echo "SCHEMA OK" || { echo "SCHEMA FAILED"; exit 1; }

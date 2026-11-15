@@ -80,7 +80,8 @@ test('sign-in: emails a code, verifies it, grants free credits once', async () =
   const me = await call('/api/me', { token: ok.data.access_token });
   assert.equal(me.data.email, 'pat@example.com');
   assert.equal(me.data.credits, 2);
-  assert.equal(me.data.packs.length, 2);
+  assert.equal(me.data.packs.length, 3);
+  assert.deepEqual(me.data.auto, { pack: null, threshold: 3 });
 
   const refreshed = await call('/api/auth/refresh', { method: 'POST', body: { refresh_token: ok.data.refresh_token } });
   assert.equal(refreshed.status, 200);
@@ -197,7 +198,7 @@ test('buying credits: checkout session, then the webhook adds credits exactly on
 test('public bits: packs list, CORS preflight, website, unknown routes', async () => {
   const p = await call('/api/packs');
   assert.equal(p.data.free_credits, 2);
-  assert.equal(p.data.packs[0].id, 'pack25');
+  assert.deepEqual(p.data.packs.map((x) => [x.id, x.credits, x.amount, x.each, x.save]), [['pack25', 25, 1900, 76, 0], ['pack50', 50, 3400, 68, 11], ['pack100', 100, 5900, 59, 22]]);
   const pre = await fetch(app.url + '/api/stage', { method: 'OPTIONS' });
   assert.equal(pre.status, 204);
   assert.equal(pre.headers.get('access-control-allow-origin'), '*');
@@ -212,4 +213,78 @@ test('SUPABASE_URL is accepted in the forms people paste', () => {
   for (const v of [want, want + '/', want + '/rest/v1/', ' ' + want + '/auth/v1 ', 'abcdefgh.supabase.co', 'https://supabase.com/dashboard/project/abcdefgh/settings/api'])
     assert.equal(base({ SUPABASE_URL: v }), want, v);
   assert.throws(() => base({ SUPABASE_URL: '' }), /SUPABASE_URL/);
+});
+
+test('auto top-up: opt in at checkout, charge once when low, credit, and stop on decline', async () => {
+  const s = await signIn('auto@example.com'); // 2 free credits
+  const post = (payload) => call('/api/stripe/webhook', { method: 'POST', raw: payload, headers: { 'Stripe-Signature': stripeSign(payload, WH) } });
+  const me = async () => (await call('/api/me', { token: s.access_token })).data;
+
+  // An ordinary purchase does not save the card or switch anything on.
+  await call('/api/checkout', { method: 'POST', token: s.access_token, body: { pack: 'pack25' } });
+  assert.equal(state.stripe.at(-1).params['payment_intent_data[setup_future_usage]'], undefined);
+
+  // Buying with the box ticked asks Stripe to save the card...
+  const co = await call('/api/checkout', { method: 'POST', token: s.access_token, body: { pack: 'pack50', auto: true } });
+  assert.equal(co.status, 200);
+  const created = state.stripe.at(-1);
+  assert.equal(created.params['payment_intent_data[setup_future_usage]'], 'off_session');
+  assert.equal(created.params.customer_creation, 'always');
+  assert.equal(created.params['metadata[auto_pack]'], 'pack50');
+  assert.equal((await me()).auto.pack, null, 'not on until the payment actually goes through');
+
+  // ...and the paid notification switches auto top-up on.
+  const event = JSON.stringify({ type: 'checkout.session.completed', data: { object: { id: created.id, customer: 'cus_123', payment_status: 'paid', metadata: { user_id: s.user.id, credits: '50', auto_pack: 'pack50' } } } });
+  assert.equal((await post(event)).status, 200);
+  assert.equal((await me()).credits, 52);
+  assert.equal((await me()).auto.pack, 'pack50');
+  assert.equal(JSON.stringify(await me()).includes('cus_123'), false, 'the Stripe customer id is never sent to the browser');
+
+  // Well above the threshold: staging does not charge anything.
+  await stageCall(s.access_token);
+  await app.idle();
+  assert.equal(state.charges.length, 0);
+
+  // Drop to 5 credits; two stagings at once take it to 3: exactly one charge.
+  state.accounts.set(s.user.id, 5);
+  await Promise.all([stageCall(s.access_token), stageCall(s.access_token)]);
+  await app.idle();
+  assert.equal(state.charges.length, 1, 'charged exactly once');
+  const charge = state.charges[0];
+  assert.equal(charge.params.amount, '3400');
+  assert.equal(charge.params.customer, 'cus_123');
+  assert.equal(charge.params.off_session, 'true');
+  assert.equal(charge.params.receipt_email, 'auto@example.com');
+  assert.ok(charge.key, 'sent with an idempotency key');
+  assert.equal((await me()).credits, 53, '3 left + 50 bought');
+
+  // The next checkout reuses the saved customer.
+  await call('/api/checkout', { method: 'POST', token: s.access_token, body: { pack: 'pack50', auto: true } });
+  assert.equal(state.stripe.at(-1).params.customer, 'cus_123');
+  assert.equal(state.stripe.at(-1).params.customer_email, undefined);
+
+  // Low again straight away: the cool-down stops a second charge.
+  state.accounts.set(s.user.id, 2);
+  await stageCall(s.access_token);
+  await app.idle();
+  assert.equal(state.charges.length, 1, 'no second charge inside the cool-down');
+
+  // After the cool-down, a declined card turns auto top-up off instead of retrying forever.
+  state.auto.get(s.user.id).lastAt = Date.now() - 3600_000;
+  state.accounts.set(s.user.id, 2);
+  state.declineCharge = true;
+  await stageCall(s.access_token);
+  await app.idle();
+  state.declineCharge = false;
+  assert.equal(state.charges.length, 1);
+  assert.equal((await me()).auto.pack, null, 'switched off after a decline');
+  assert.equal((await me()).credits, 1, 'no credits added for a declined charge');
+
+  // Turning it off by hand.
+  state.auto.get(s.user.id).pack = 'pack50';
+  assert.equal((await call('/api/auto-topup', { method: 'POST', token: s.access_token, body: { enabled: true } })).status, 400);
+  const offRes = await call('/api/auto-topup', { method: 'POST', token: s.access_token, body: { enabled: false } });
+  assert.equal(offRes.status, 200);
+  assert.equal((await me()).auto.pack, null);
+  assert.equal((await call('/api/auto-topup', { method: 'POST', body: { enabled: false } })).status, 401);
 });

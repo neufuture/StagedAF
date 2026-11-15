@@ -66,7 +66,7 @@
     const count = () => picks.filter((p) => p.on).length;
     const refresh = () => {
       const n = count();
-      const credits = SAF.settings.mode === 'own-key' ? Infinity : Number(SAF.settings.credits ?? Infinity);
+      const credits = SAF.settings.autoPack ? Infinity : Number(SAF.settings.credits ?? Infinity);
       const short = n > credits;
       stageBtn.textContent = !n ? 'Choose photos to stage' : short ? `Only ${credits} credit${credits === 1 ? '' : 's'} left` : `Stage ${n} & upload`;
       stageBtn.disabled = !n || short || !SAF.canStage();

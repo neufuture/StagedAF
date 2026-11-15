@@ -36,9 +36,11 @@
   // Account mode: the balance, with a nudge to top up when it runs low.
   function creditsRow() {
     const s = SAF.settings;
-    if (s.mode === 'own-key' || !SAF.canStage() || typeof s.credits !== 'number') return null;
+    if (!SAF.canStage() || typeof s.credits !== 'number') return null;
+    const text = s.credits === 0 ? "You're out of credits." : `${s.credits} credit${s.credits === 1 ? '' : 's'} left`;
+    if (s.autoPack) return h('div', { class: 'sect row' }, h('span', { class: 'grow' }, text), h('span', { class: 'muted' }, 'Auto top-up on'));
     const low = s.credits <= 3;
-    return h('div', { class: low ? 'warn row' : 'sect row' }, h('span', { class: 'grow' }, s.credits === 0 ? "You're out of credits." : `${s.credits} credit${s.credits === 1 ? '' : 's'} left`),
+    return h('div', { class: low ? 'warn row' : 'sect row' }, h('span', { class: 'grow' }, text),
       low && h('button', { class: 'link', onclick: SAF.openSettings }, 'Buy more'));
   }
 
@@ -57,7 +59,7 @@
     const toggle = h('input', { type: 'checkbox', checked: !!SAF.settings.stageUploads, onchange: () => SAF.saveSetting('stageUploads', toggle.checked) });
     const parts = [
       head,
-      !SAF.canStage() && h('div', { class: 'warn' }, SAF.setupHint() + ' ', h('button', { class: 'link', onclick: SAF.openSettings }, SAF.settings.mode === 'own-key' ? 'Open settings' : 'Sign in')),
+      !SAF.canStage() && h('div', { class: 'warn' }, SAF.setupHint() + ' ', h('button', { class: 'link', onclick: SAF.openSettings }, 'Sign in')),
       creditsRow(),
       h('div', { class: 'sect' }, h('label', { class: 'switch' }, toggle, 'Stage new uploads'),
         h('div', { class: 'muted', style: 'margin-top:6px' }, SAF.settings.stageUploads ? "Upload photos as usual — you'll pick which ones to stage before anything is sent." : 'Off: uploads go straight to AppFolio. Use the Stage button on any existing photo.')),

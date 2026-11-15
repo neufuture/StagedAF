@@ -70,15 +70,21 @@
     async me() {
       const { token } = await auth();
       const d = await request(await settings(), '/api/me', { token });
-      await chrome.storage.local.set({ credits: d.credits });
+      await chrome.storage.local.set({ credits: d.credits, autoPack: (d.auto && d.auto.pack) || null });
       return d;
     },
-    async checkout({ pack }) {
+    async checkout({ pack, auto }) {
       const { token } = await auth();
-      return (await request(await settings(), '/api/checkout', { method: 'POST', token, body: { pack } })).url;
+      return (await request(await settings(), '/api/checkout', { method: 'POST', token, body: { pack, auto: auto === true } })).url;
+    },
+    async autoOff() {
+      const { token } = await auth();
+      await request(await settings(), '/api/auto-topup', { method: 'POST', token, body: { enabled: false } });
+      await chrome.storage.local.set({ autoPack: null });
+      return true;
     },
     async signOut() {
-      await chrome.storage.local.set({ session: null, credits: null });
+      await chrome.storage.local.set({ session: null, credits: null, autoPack: null });
       return true;
     },
   };

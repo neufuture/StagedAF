@@ -20,7 +20,9 @@
     <div id="signedIn" hidden>
       <p class="balance"><b id="credits">–</b> <span id="creditsLabel">credits</span></p>
       <p class="hint">Signed in as <span id="who"></span>. Each staged photo uses one credit; if staging fails the credit comes back.</p>
-      <div class="actions" id="packs"></div>
+      <div class="packs" id="packs"></div>
+      <label class="check" id="autoRow"><input id="autoBox" type="checkbox"> <span>Auto top-up: save my card and buy the same pack again whenever I'm down to <span class="thr">3</span> credits. Turn it off here any time.</span></label>
+      <p id="autoOn" hidden>Auto top-up is on: <b id="autoWhat"></b> when you're down to <span class="thr">3</span> credits. <button id="autoOff" type="button">Turn off</button></p>
       <div class="actions"><button id="refresh" type="button">Refresh balance</button><button id="signOut" type="button">Sign out</button></div>
     </div>
     <p id="authResult" role="status"></p>
@@ -50,31 +52,7 @@
   <section>
     <h2>Advanced</h2>
     <label>UnitStager server <input id="serverUrl" type="text" spellcheck="false"></label>
-    <label class="check"><input id="ownKeyMode" type="checkbox"> Use my own OpenAI API key instead of a UnitStager account (no credits; you pay the image service directly)</label>
-    <div id="ownKey" hidden>
-      <label>OpenAI API key
-        <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
-      </label>
-      <div class="cols">
-        <label>Model <input id="model" type="text" spellcheck="false"></label>
-        <label>Quality
-          <select id="quality"><option value="high">High (best, slowest)</option><option value="medium">Medium</option><option value="low">Low (draft)</option><option value="auto">Auto</option></select>
-        </label>
-        <label>Keep-the-room fidelity
-          <select id="inputFidelity"><option value="high">High</option><option value="low">Low</option><option value="default">Model default</option></select>
-        </label>
-      </div>
-      <div class="cols">
-        <label>API base URL <input id="apiBase" type="text" spellcheck="false"></label>
-        <label>Photos staged at once <input id="concurrency" type="number" min="1" max="4"></label>
-      </div>
-      <div class="actions"><button id="test" type="button">Test key</button><span id="testResult" role="status"></span></div>
-      <label>Staging prompt
-        <textarea id="basePrompt" rows="12" spellcheck="true"></textarea>
-      </label>
-      <p class="hint"><code>{room}</code> and <code>{style}</code> are filled in per photo. Instructions typed for a specific photo are added after this prompt.</p>
-      <div class="actions"><button id="resetPrompt" type="button">Restore default prompt</button></div>
-    </div>
+    <label>Photos staged at once <input id="concurrency" type="number" min="1" max="4"></label>
     <label>Longest edge sent (px) <input id="maxInputEdge" type="number" min="512" max="4096" step="64"></label>
   </section>
 

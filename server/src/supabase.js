@@ -96,5 +96,14 @@ export const ensureAccount = (env, user) => rpc(env, 'ensure_account', { p_user:
 // Take one credit. Returns the new balance, or -1 if there were none.
 export const spendCredit = (env, userId, ref) => rpc(env, 'spend_credit', { p_user: userId, p_ref: ref });
 
+// {credits, auto_pack, has_card, stripe_customer}
+export const getAccount = (env, userId) => rpc(env, 'get_account', { p_user: userId });
+
+// Auto top-up on (pack id) or off (null); optionally remember the Stripe customer.
+export const setAutoTopup = (env, userId, pack, customer = null) => rpc(env, 'set_auto_topup', { p_user: userId, p_pack: pack, p_customer: customer });
+
+// Should an auto top-up fire now? -> {pack, customer, stamp} or null. At most one caller wins.
+export const claimAutoTopup = (env, userId, threshold, minSeconds) => rpc(env, 'claim_auto_topup', { p_user: userId, p_threshold: threshold, p_min_seconds: minSeconds });
+
 // Add credits. `ref` makes it safe to repeat: the same ref is only ever applied once.
 export const addCredits = (env, userId, amount, reason, ref) => rpc(env, 'add_credits', { p_user: userId, p_amount: amount, p_reason: reason, p_ref: ref });

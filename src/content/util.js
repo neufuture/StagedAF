@@ -29,10 +29,9 @@
     SAF.emit('settings');
   });
 
-  // Is staging set up? Either signed in (account mode) or an API key (own-key mode).
-  SAF.canStage = () => (SAF.settings.mode === 'own-key' ? !!SAF.settings.apiKey : !!(SAF.settings.session && SAF.settings.session.access_token));
-  SAF.setupHint = () =>
-    SAF.settings.mode === 'own-key' ? 'Add your API key in UnitStager settings to start staging.' : 'Sign in to UnitStager to start staging. New accounts include free staged photos.';
+  // Is staging set up? It needs a signed-in UnitStager account.
+  SAF.canStage = () => !!(SAF.settings.session && SAF.settings.session.access_token);
+  SAF.setupHint = () => 'Sign in to UnitStager to start staging. New accounts include free staged photos.';
   SAF.openSettings = () => SAF.send({ type: 'saf:open-options' }).catch(() => {});
 
   SAF.sleep = (ms) => new Promise((r) => setTimeout(r, ms));
