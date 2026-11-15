@@ -85,15 +85,17 @@ on the server (see "Changing prices" below).
    repository**, and connect GitHub.
 2. Choose the `neufuture/StagedAF` repository and the branch that has the
    `server` folder.
-3. Set the **root directory** to `server`. Leave the deploy command as
-   `npx wrangler deploy`.
-4. Deploy. You get an address like `unitstager.<your-name>.workers.dev`.
-   Opening it should show the UnitStager website.
+3. Set the **root directory** (sometimes labelled "Path") to `server`. Leave
+   the build command empty and the deploy command as `npx wrangler deploy`.
+   If the build fails with "Could not detect a directory containing static
+   files", the root directory wasn't set: fix it under **Settings → Build**
+   and retry.
+4. Deploy. Opening the Worker's address should show the UnitStager website.
 5. **Add the six secrets.** In the Worker: **Settings → Variables and
-   Secrets → Add**. Add each of the six names from the table above, choosing
-   type **Secret** for all of them.
-6. **Connect the domain.** **Settings → Domains & Routes → Add → Custom
-   domain →** `unitstager.com`.
+   Secrets → Add** (the runtime one, not the one under Build). Add each of
+   the six names from the table above, choosing type **Secret** for all.
+6. **Connect the domain.** In the Worker's **Domains** tab, under **Custom
+   Domains and Routes**, click **Add Domain** and enter `unitstager.com`.
 
 From then on, every change pushed to that branch redeploys automatically.
 
