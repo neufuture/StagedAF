@@ -105,5 +105,9 @@ export const setAutoTopup = (env, userId, pack, customer = null) => rpc(env, 'se
 // Should an auto top-up fire now? -> {pack, customer, stamp} or null. At most one caller wins.
 export const claimAutoTopup = (env, userId, threshold, minSeconds) => rpc(env, 'claim_auto_topup', { p_user: userId, p_threshold: threshold, p_min_seconds: minSeconds });
 
+// Purchase history: record a payment's amount, and list an account's purchases.
+export const notePayment = (env, ref, cents) => rpc(env, 'note_payment', { p_ref: ref, p_cents: cents });
+export const listPurchases = (env, userId) => rpc(env, 'list_purchases', { p_user: userId });
+
 // Add credits. `ref` makes it safe to repeat: the same ref is only ever applied once.
 export const addCredits = (env, userId, amount, reason, ref) => rpc(env, 'add_credits', { p_user: userId, p_amount: amount, p_reason: reason, p_ref: ref });

@@ -60,11 +60,19 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
       a.lastAt = Date.now();
       return { pack: a.pack, customer: a.customer, stamp: a.lastAt };
     },
+    note_payment({ p_ref, p_cents }) {
+      const row = state.ledger.find((l) => l.ref === p_ref);
+      if (row) row.amount_cents = p_cents;
+      return null;
+    },
+    list_purchases({ p_user }) {
+      return state.ledger.filter((l) => l.user === p_user && ['purchase', 'auto-topup'].includes(l.reason)).map((l) => ({ created_at: l.at, credits: l.delta, reason: l.reason, ref: l.ref, amount_cents: l.amount_cents ?? null })).reverse();
+    },
     add_credits({ p_user, p_amount, p_reason, p_ref }) {
       if (!state.refs.has(p_ref)) {
         state.refs.add(p_ref);
         state.accounts.set(p_user, (state.accounts.get(p_user) || 0) + p_amount);
-        state.ledger.push({ user: p_user, delta: p_amount, reason: p_reason, ref: p_ref });
+        state.ledger.push({ user: p_user, delta: p_amount, reason: p_reason, ref: p_ref, at: new Date().toISOString() });
       }
       return state.accounts.get(p_user);
     },
@@ -110,6 +118,12 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
       }
       if (/^\/v1\/customers\/[^/]+\/payment_methods$/.test(p)) {
         return send(200, { data: state.noCard ? [] : [{ id: 'pm_card_1', type: 'card' }] });
+      }
+      if (/^\/v1\/checkout\/sessions\/cs_/.test(p) && req.method === 'GET') {
+        return send(200, { id: p.split('/').pop(), payment_intent: { latest_charge: { receipt_url: 'https://pay.stripe.test/receipts/' + p.split('/').pop() } } });
+      }
+      if (/^\/v1\/payment_intents\/pi_/.test(p) && req.method === 'GET') {
+        return send(200, { id: p.split('/').pop(), latest_charge: { receipt_url: 'https://pay.stripe.test/receipts/' + p.split('/').pop() } });
       }
       if (p === '/v1/payment_intents') {
         const params = Object.fromEntries(new URLSearchParams(raw.toString()));

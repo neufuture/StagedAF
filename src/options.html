@@ -24,6 +24,9 @@
       <label class="check" id="autoRow"><input id="autoBox" type="checkbox"> <span>Auto top-up: save my card and buy the same pack again whenever I'm down to <span class="thr">3</span> credits. Turn it off here any time.</span></label>
       <p id="autoOn" hidden>Auto top-up is on: <b id="autoWhat"></b> when you're down to <span class="thr">3</span> credits. <button id="autoOff" type="button">Turn off</button></p>
       <div class="actions"><button id="refresh" type="button">Refresh balance</button><button id="signOut" type="button">Sign out</button></div>
+      <h3>Purchase history</h3>
+      <table id="history"><tbody></tbody></table>
+      <p class="hint" id="historyEmpty">No purchases yet.</p>
     </div>
     <p id="authResult" role="status"></p>
   </section>
@@ -44,14 +47,7 @@
   </section>
 
   <section>
-    <h2>Image host access</h2>
-    <p class="hint">Only needed if staging an existing photo fails with “can't download photos from …”. Enter that host to let UnitStager read photos from it.</p>
-    <div class="actions"><input id="host" type="text" placeholder="images.example-cdn.com" spellcheck="false"><button id="grant" type="button">Grant access</button><span id="grantResult" role="status"></span></div>
-  </section>
-
-  <section>
     <h2>Advanced</h2>
-    <label>UnitStager server <input id="serverUrl" type="text" spellcheck="false"></label>
     <label>Photos staged at once <input id="concurrency" type="number" min="1" max="4"></label>
     <label>Longest edge sent (px) <input id="maxInputEdge" type="number" min="512" max="4096" step="64"></label>
   </section>

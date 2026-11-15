@@ -53,7 +53,10 @@ check "…and it names the pack and customer"          "$(q -c "select c->>'pack
 check "inside the cool-down: no claim"               "$(q -c "select claim_auto_topup('$U',3,600) is null")" t
 q -c "select set_auto_topup('$U',null,null)"
 check "turning it off keeps the customer on file"    "$(q -c "select (get_account('$U')->>'auto_pack') is null and get_account('$U')->>'stripe_customer' = 'cus_1'")" t
-check "browser roles cannot call spend_credit"       "$(q -c "select has_function_privilege('authenticated','spend_credit(uuid,text)','execute') or has_function_privilege('anon','add_credits(uuid,integer,text,text)','execute') or has_function_privilege('anon','claim_auto_topup(uuid,integer,integer)','execute') or has_function_privilege('authenticated','set_auto_topup(uuid,text,text)','execute') or has_function_privilege('anon','get_account(uuid)','execute')")" f
+check "purchases start without an amount"             "$(q -c "select (list_purchases('$U')->0->>'amount_cents') is null and json_array_length(list_purchases('$U')) = 1")" t
+q -c "select note_payment('stripe:cs_1', 1900)"
+check "purchase history shows credits and amount"    "$(q -c "select (p->>'credits') || '/' || (p->>'amount_cents') || '/' || (p->>'ref') from json_array_elements(list_purchases('$U')) p")" "25/1900/stripe:cs_1"
+check "browser roles cannot call spend_credit"       "$(q -c "select has_function_privilege('authenticated','spend_credit(uuid,text)','execute') or has_function_privilege('anon','add_credits(uuid,integer,text,text)','execute') or has_function_privilege('anon','claim_auto_topup(uuid,integer,integer)','execute') or has_function_privilege('authenticated','set_auto_topup(uuid,text,text)','execute') or has_function_privilege('anon','get_account(uuid)','execute') or has_function_privilege('authenticated','list_purchases(uuid)','execute') or has_function_privilege('anon','note_payment(text,integer)','execute')")" f
 check "server role can"                              "$(q -c "select has_function_privilege('service_role','add_credits(uuid,integer,text,text)','execute')")" t
 check "row level security is on"                     "$(q -c "select bool_and(relrowsecurity) from pg_class where relname in ('accounts','credit_ledger')")" t
 [ $fail = 0 ] && echo "SCHEMA OK" || { echo "SCHEMA FAILED"; exit 1; }

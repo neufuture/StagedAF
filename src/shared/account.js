@@ -77,6 +77,14 @@
       const { token } = await auth();
       return (await request(await settings(), '/api/checkout', { method: 'POST', token, body: { pack, auto: auto === true } })).url;
     },
+    async purchases() {
+      const { token } = await auth();
+      return (await request(await settings(), '/api/purchases', { token })).purchases;
+    },
+    async receipt({ id }) {
+      const { token } = await auth();
+      return (await request(await settings(), '/api/receipt', { method: 'POST', token, body: { id } })).url;
+    },
     async autoOff() {
       const { token } = await auth();
       await request(await settings(), '/api/auto-topup', { method: 'POST', token, body: { enabled: false } });

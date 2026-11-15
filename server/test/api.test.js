@@ -288,3 +288,27 @@ test('auto top-up: opt in at checkout, charge once when low, credit, and stop on
   assert.equal((await me()).auto.pack, null);
   assert.equal((await call('/api/auto-topup', { method: 'POST', body: { enabled: false } })).status, 401);
 });
+
+test('purchase history: lists own purchases with amounts, and links to Stripe receipts', async () => {
+  const a = await signIn('history@example.com');
+  const b = await signIn('other@example.com');
+  const pay = async (s, id, credits, total, extra = {}) => {
+    const event = JSON.stringify({ type: 'checkout.session.completed', data: { object: { id, payment_status: 'paid', amount_total: total, metadata: { user_id: s.user.id, credits: String(credits), ...extra } } } });
+    return call('/api/stripe/webhook', { method: 'POST', raw: event, headers: { 'Stripe-Signature': stripeSign(event, WH) } });
+  };
+  assert.deepEqual((await call('/api/purchases', { token: a.access_token })).data.purchases, [], 'free sign-up credits are not a purchase');
+  await pay(a, 'cs_hist_1', 25, 1900);
+  await pay(b, 'cs_other_1', 100, 5900);
+  await pay(a, 'cs_hist_2', 50, 3400, { auto_pack: 'pack50' });
+
+  const list = (await call('/api/purchases', { token: a.access_token })).data.purchases;
+  assert.deepEqual(list.map((p) => [p.id, p.credits, p.amount, p.auto]), [['cs_hist_2', 50, 3400, false], ['cs_hist_1', 25, 1900, false]]);
+  assert.ok(!Number.isNaN(Date.parse(list[0].date)));
+
+  const r = await call('/api/receipt', { method: 'POST', token: a.access_token, body: { id: 'cs_hist_1' } });
+  assert.equal(r.data.url, 'https://pay.stripe.test/receipts/cs_hist_1');
+  assert.equal((await call('/api/receipt', { method: 'POST', token: a.access_token, body: { id: 'cs_other_1' } })).status, 404, "cannot open someone else's receipt");
+  assert.equal((await call('/api/receipt', { method: 'POST', token: a.access_token, body: { id: '../customers' } })).status, 404);
+  assert.equal((await call('/api/purchases')).status, 401);
+  assert.equal((await call('/api/receipt', { method: 'POST', body: { id: 'cs_hist_1' } })).status, 401);
+});

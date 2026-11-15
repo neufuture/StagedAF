@@ -8,12 +8,14 @@
 //   POST /api/stage          multipart photo         -> staged photo (costs 1 credit)
 //   POST /api/checkout       {pack, auto?}           -> Stripe Checkout URL
 //   POST /api/auto-topup     {enabled:false}         turn auto top-up off
+//   GET  /api/purchases                              -> the account's purchases
+//   POST /api/receipt        {id}                    -> Stripe receipt URL for one purchase
 //   POST /api/stripe/webhook                         Stripe -> add purchased credits
 //
 // Everything else is the static website in ./public.
 import { CORS, HttpError, json, readJson } from './http.js';
 import { stage } from './stage.js';
-import { AUTO_THRESHOLD, createCheckout, publicPacks, webhook } from './stripe.js';
+import { AUTO_THRESHOLD, createCheckout, publicPacks, purchases, receipt, webhook } from './stripe.js';
 import { ensureAccount, getAccount, refreshSession, requireUser, sendCode, setAutoTopup, verifyCode } from './supabase.js';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -56,6 +58,12 @@ async function api(request, env, path, ctx) {
       const user = await requireUser(env, request);
       const body = await readJson(request);
       return createCheckout(request, env, user, String(body.pack || ''), body.auto === true);
+    }
+    case 'GET /api/purchases':
+      return purchases(env, await requireUser(env, request));
+    case 'POST /api/receipt': {
+      const user = await requireUser(env, request);
+      return receipt(env, user, String((await readJson(request)).id || ''));
     }
     case 'POST /api/auto-topup': {
       // Turning it ON happens by buying a pack with the box ticked (that is

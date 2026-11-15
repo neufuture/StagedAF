@@ -121,8 +121,8 @@ If something fails, the Worker's **Logs** tab in Cloudflare shows why.
 - [ ] Connect a real email service in Supabase (step 2).
 - [ ] Fill in the bracketed placeholders in `server/public/privacy.html` and
       have the page reviewed.
-- [ ] Publish the extension to the Chrome Web Store, then put its link in
-      `INSTALL_URL` at the top of `server/public/site.js`.
+- [ ] Publish the extension (see [`STORE_LISTING.md`](STORE_LISTING.md)), then put
+      its Chrome Web Store link in `INSTALL_URL` at the top of `server/public/site.js`.
 
 ## Day-to-day
 
@@ -138,6 +138,12 @@ under `vars`. Free sign-up credits are `FREE_CREDITS`. The packs default to
 **After a server update that changes the database.** Run
 `server/supabase/schema.sql` again in the Supabase SQL Editor. It is written
 to be run repeatedly and never removes data.
+
+**Receipts.** Customers see their purchases under **Purchase history** in
+the extension's settings, each with a link to its Stripe receipt. To also
+email a receipt after every payment, turn on **Successful payments** under
+Stripe's **Settings → Customer emails**. The business name and details shown
+on receipts come from Stripe's **Settings → Business → Public details**.
 
 **Auto top-up.** A customer turns it on by ticking the box when buying a
 pack; Stripe saves their card. When their balance falls to 3 credits the

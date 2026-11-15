@@ -117,6 +117,8 @@ server/src/               the API: sign-in, credits, staging, Stripe
 server/public/            the website
 server/supabase/schema.sql  accounts and credits tables
 docs/SETUP.md             how to deploy the server
+docs/STORE_LISTING.md     publishing to the Chrome and Edge stores
+scripts/package.sh        builds the store upload package into dist/
 ```
 
 ## Tests

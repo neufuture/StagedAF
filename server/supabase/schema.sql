@@ -26,6 +26,9 @@ create table if not exists public.credit_ledger (
 );
 create index if not exists credit_ledger_user_idx on public.credit_ledger (user_id, created_at desc);
 
+-- What was paid for a purchase, for the customer's purchase history.
+alter table public.credit_ledger add column if not exists amount_cents integer;
+
 -- Nobody reads or writes these tables directly from a browser: with row level
 -- security on and no policies, only the server's secret key can touch them.
 alter table public.accounts enable row level security;
@@ -100,6 +103,28 @@ begin
   returning json_build_object('pack', auto_pack, 'customer', stripe_customer, 'stamp', (extract(epoch from auto_last_at) * 1000)::bigint) into v;
   return v;
 end $$;
+
+-- Record what a purchase cost (kept separate from add_credits so that adding
+-- credits never depends on it).
+create or replace function public.note_payment(p_ref text, p_cents integer)
+returns void language sql security definer set search_path = public as $$
+  update credit_ledger set amount_cents = p_cents where ref = p_ref;
+$$;
+
+-- An account's purchases, newest first.
+create or replace function public.list_purchases(p_user uuid)
+returns json language sql security definer set search_path = public as $$
+  select coalesce(json_agg(row_to_json(x)), '[]'::json) from (
+    select created_at, delta as credits, reason, ref, amount_cents
+    from credit_ledger where user_id = p_user and reason in ('purchase', 'auto-topup')
+    order by created_at desc limit 50
+  ) x;
+$$;
+
+revoke all on function public.note_payment(text, integer) from public, anon, authenticated;
+revoke all on function public.list_purchases(uuid) from public, anon, authenticated;
+grant execute on function public.note_payment(text, integer) to service_role;
+grant execute on function public.list_purchases(uuid) to service_role;
 
 revoke all on function public.get_account(uuid) from public, anon, authenticated;
 revoke all on function public.set_auto_topup(uuid, text, text) from public, anon, authenticated;

@@ -34,3 +34,8 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .pack .each { display: block; font-weight: 400; font-size: 12.5px; color: var(--muted); }
 .pack .save { display: inline-block; margin-top: 6px; font-size: 12px; font-weight: 700; color: #047857; background: #d1fae5; border-radius: 999px; padding: 1px 8px; }
 #autoOn { margin: 12px 0 0; }
+h3 { font-size: 13px; margin: 20px 0 6px; }
+#history { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+#history td { padding: 7px 8px 7px 0; border-top: 1px solid var(--line); }
+#history td:last-child { text-align: right; padding-right: 0; }
+#history button { padding: 3px 10px; font-size: 12.5px; }

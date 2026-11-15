@@ -6,7 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const ext = path.resolve(__dirname, '..');
+const ext = process.env.EXT_DIR || path.resolve(__dirname, '..'); // EXT_DIR: test an unpacked store package instead
 const fx = (f) => fs.readFileSync(path.join(__dirname, 'fixtures', f));
 const assert = (cond, msg) => {
   if (!cond) throw new Error('ASSERT: ' + msg);
@@ -211,6 +211,16 @@ const assert = (cond, msg) => {
       assert(mock.state.accounts.get(bought.params['metadata[user_id]']) === 53, 'auto top-up credits added');
 
       await opts.bringToFront();
+      await opts.locator('#refresh').click();
+      await opts.locator('#history tr').nth(1).waitFor();
+      const rows = await opts.locator('#history tr').allInnerTexts();
+      assert(rows.length === 2 && /50 credits \(auto top-up\)\s+\$34\.00/.test(rows[0]) && /50 credits\s/.test(rows[1]), 'purchase history lists the purchase and the auto top-up');
+      await ctx.route('https://pay.stripe.test/**', (route) => route.fulfill({ contentType: 'text/html', body: 'mock receipt' }));
+      const [receiptTab] = await Promise.all([ctx.waitForEvent('page'), opts.locator('#history button').first().click()]);
+      await receiptTab.waitForURL(/pay\.stripe\.test\/receipts\/pi_test_1/);
+      assert(true, 'Receipt opens the Stripe receipt for that payment');
+      await receiptTab.close();
+      await opts.screenshot({ path: path.join(__dirname, 'out-history.png'), fullPage: false });
       await opts.locator('#autoOff').click();
       await opts.locator('#autoRow').waitFor();
       assert(mock.state.auto.get(bought.params['metadata[user_id]']).pack === null, 'auto top-up can be turned off from settings');

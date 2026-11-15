@@ -1,0 +1,95 @@
+# Publishing UnitStager to the Chrome Web Store and Edge Add-ons
+
+The upload package is `dist/unitstager-extension-<version>.zip`. The same file
+goes to both stores. Rebuild it after any change with `bash scripts/package.sh`
+(bump `"version"` in `manifest.json` first; stores reject a repeated version).
+
+## Where to upload
+
+- **Chrome Web Store:** chrome.google.com/webstore/devconsole. Needs a
+  developer account (a small one-time registration fee). Click **New item**
+  and upload the zip.
+- **Microsoft Edge Add-ons:** partner.microsoft.com → Edge → **Create new
+  extension**, and upload the same zip.
+
+Both review the submission before it goes live; allow a few days. Either
+store lets you publish as **unlisted** (only people with the link can find
+it), which suits a first group of testers.
+
+Once Chrome's listing is live, paste its link into `INSTALL_URL` at the top
+of `server/public/site.js` so the website's button works.
+
+## Listing text
+
+**Name**
+
+UnitStager – Virtual Staging for AppFolio
+
+**Short description** (132 characters max)
+
+Virtually stage unit photos inside AppFolio. Furnish empty rooms in about a minute and replace the original in one click.
+
+**Category:** Workflow & Planning (Chrome) / Productivity (Edge)
+
+**Detailed description**
+
+UnitStager adds virtual staging to the AppFolio pages you already use.
+
+On a unit's Photos section, every photo gets a Stage button. Click it, pick a
+room type and style or type what you want, and in about a minute you get a
+furnished version to compare side by side with the original. One more click
+uploads the staged photo to the unit and removes the original; a copy of the
+original is saved to your computer first.
+
+Uploading a fresh set of photos? Switch on "Stage new uploads" and choose
+which empty rooms to furnish before anything is sent to AppFolio.
+
+• Furniture is added; walls, floors, windows and fixtures are left as they are
+• Before/after review on every photo, with one-click regenerate
+• Optional "Virtually staged" disclosure label
+• Works on property and unit pages
+
+Sign in with your email to get free staged photos. After that it is pay per
+photo, with credit packs that don't expire and optional auto top-up.
+
+UnitStager is an independent product and is not affiliated with or endorsed
+by AppFolio, Inc.
+
+**Privacy policy URL:** https://unitstager.com/privacy.html
+
+**Support email:** hello@unitstager.com
+
+## Review questions (Chrome's "Privacy practices" tab)
+
+**Single purpose**
+
+Virtually stage listing photos on AppFolio property and unit pages.
+
+**Permission justifications**
+
+| Permission | Justification |
+|---|---|
+| `storage` | Saves the user's settings and sign-in session on their device. |
+| `offscreen` | Staging a photo takes one to two minutes, longer than a background service worker stays alive. An offscreen document resizes the photo and waits for the result. |
+| `downloads` | Saves a copy of the original photo to the user's Downloads folder before it is replaced, and lets the user download a staged photo. |
+| Host permission `https://*.appfolio.com/*` | The extension runs only on AppFolio. It adds Stage buttons to photos on property and unit pages, reads the photo the user chooses to stage, and uploads the staged photo through AppFolio's own uploader. |
+
+**Remote code:** No. All code is in the package.
+
+**Data usage** — tick these and nothing else:
+
+- *Personally identifiable information*: the user's email address, for sign-in.
+- *Website content*: the photos the user chooses to stage, and any instructions they type. Sent to the UnitStager server only when the user clicks Stage.
+
+Certify that data is not sold, not used for purposes unrelated to the
+extension's single purpose, and not used for creditworthiness or lending.
+
+## Images you need to supply
+
+The stores want real screenshots, which have to come from your AppFolio:
+
+- **Screenshots:** 1280×800 (at least one, up to five). Good ones: the Stage
+  buttons on a unit's photos; the before/after review; the upload picker.
+  Crop or blur addresses and tenant names.
+- **Store icon:** 128×128. Use `icons/icon128.png`.
+- **Small promo tile** (Chrome, optional): 440×280.

@@ -1,7 +1,7 @@
 (() => {
   const SAF = globalThis.SAF;
   const $ = (id) => document.getElementById(id);
-  const FIELDS = ['serverUrl', 'maxInputEdge', 'concurrency', 'style', 'stageUploads', 'reviewBeforeUpload',
+  const FIELDS = ['maxInputEdge', 'concurrency', 'style', 'stageUploads', 'reviewBeforeUpload',
     'autoReplace', 'backupOriginal', 'disclosureLabel', 'disclosureText', 'pagePattern', 'photoSelector', 'uploadInputSelector', 'deleteSelector', 'minPhotoSize'];
 
   for (const [value, label] of SAF.STYLES) $('style').append(new Option(label, value));
@@ -19,7 +19,7 @@
 
   const save = async (id) => {
     let value = read($(id));
-    if (value === '' && ['pagePattern', 'disclosureText', 'serverUrl'].includes(id)) write($(id), (value = SAF.DEFAULTS[id]));
+    if (value === '' && ['pagePattern', 'disclosureText'].includes(id)) write($(id), (value = SAF.DEFAULTS[id]));
     await chrome.storage.local.set({ [id]: value });
     flash();
   };
@@ -102,6 +102,37 @@
   }
 
   // Ask the server for the current balance and packs (also after a purchase).
+  // Purchases with a link to each Stripe receipt.
+  function showHistory(list) {
+    const body = $('history').tBodies[0];
+    $('historyEmpty').hidden = list.length > 0;
+    body.replaceChildren(
+      ...list.map((p) => {
+        const row = document.createElement('tr');
+        const cell = (text) => {
+          const td = document.createElement('td');
+          td.textContent = text;
+          return td;
+        };
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = 'Receipt';
+        btn.addEventListener('click', async () => {
+          try {
+            window.open(await account('receipt', { id: p.id }), '_blank', 'noopener');
+          } catch (e) {
+            say(e.message, 'bad');
+          }
+        });
+        const last = document.createElement('td');
+        last.append(btn);
+        const date = new Date(p.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        row.append(cell(date), cell(`${p.credits} credits${p.auto ? ' (auto top-up)' : ''}`), cell(p.amount != null ? '$' + (p.amount / 100).toFixed(2) : ''), last);
+        return row;
+      })
+    );
+  }
+
   async function refreshAccount(quiet) {
     const s = SAF.merge(await chrome.storage.local.get(null));
     if (!s.session) return;
@@ -110,6 +141,7 @@
       threshold = (me.auto && me.auto.threshold) || threshold;
       showPacks(me.packs);
       await reshow();
+      showHistory(await account('purchases').catch(() => []));
       if (!quiet) say('');
     } catch (e) {
       if (!quiet || e.code === 'auth') say(e.message, 'bad');
@@ -160,18 +192,4 @@
   // Coming back to this tab after paying: pick up the new balance.
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && refreshAccount(true));
   reshow().then(() => refreshAccount(true));
-
-  $('grant').addEventListener('click', async () => {
-    const out = $('grantResult');
-    const host = $('host').value.trim().replace(/^https?:\/\//, '').split('/')[0];
-    if (!/^[\w.-]+\.[a-z]{2,}$/i.test(host)) return (out.className = 'bad'), (out.textContent = 'Enter a host like images.example.com');
-    try {
-      const granted = await chrome.permissions.request({ origins: [`https://${host}/*`] });
-      out.className = granted ? 'ok' : 'bad';
-      out.textContent = granted ? `Access to ${host} granted.` : 'Not granted.';
-    } catch (e) {
-      out.className = 'bad';
-      out.textContent = String(e.message || e);
-    }
-  });
 })();

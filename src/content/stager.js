@@ -151,7 +151,7 @@
         try {
           host = new URL(job.source.url).host;
         } catch {}
-        throw new Error(`UnitStager can't download photos from ${host || 'this image host'}. Open UnitStager settings → "Image host access" and grant it.`);
+        throw new Error(`UnitStager couldn't download the original photo from ${host || 'its image host'}.`);
       }
       const norm = await SAF.normalizeImage(blob, Number(s.maxInputEdge) || 2048);
       job.beforeBlob = norm.blob;

@@ -1,7 +1,7 @@
 // Stripe: selling credit packs through Checkout, and the webhook that adds
 // the credits once a payment has gone through.
 import { HttpError, json, requireEnv } from './http.js';
-import { addCredits, claimAutoTopup, getAccount, setAutoTopup } from './supabase.js';
+import { addCredits, claimAutoTopup, getAccount, listPurchases, notePayment, setAutoTopup } from './supabase.js';
 
 // Credit packs. `amount` is in cents. Override with the PACKS variable (JSON, same shape).
 const DEFAULT_PACKS = [
@@ -115,6 +115,7 @@ export async function maybeAutoTopUp(env, user, credits) {
     const { res, data } = await stripe(env, '/v1/payment_intents', { params, idempotencyKey: `auto-${user.id}-${claim.stamp}` });
     if (res.ok && data && data.status === 'succeeded') {
       await addCredits(env, user.id, pack.credits, 'auto-topup', 'stripe:' + data.id);
+      await notePayment(env, 'stripe:' + data.id, pack.amount).catch(() => {});
     } else if (res.status === 402 || (res.ok && data && data.status !== 'processing')) {
       // Declined, or the bank wants the customer present: stop trying until they buy again.
       await off((data && data.error && data.error.code) || (data && data.status) || 'declined');
@@ -124,6 +125,27 @@ export async function maybeAutoTopUp(env, user, credits) {
   } catch (e) {
     console.error('auto top-up failed', e && e.message);
   }
+}
+
+// The signed-in customer's purchases, for the "Purchase history" list.
+export async function purchases(env, user) {
+  const rows = (await listPurchases(env, user.id)) || [];
+  return json({
+    purchases: rows.map((r) => ({ id: String(r.ref || '').replace(/^stripe:/, ''), date: r.created_at, credits: r.credits, amount: r.amount_cents ?? null, auto: r.reason === 'auto-topup' })),
+  });
+}
+
+// Stripe's receipt page for one of the customer's own purchases.
+export async function receipt(env, user, id) {
+  requireEnv(env, 'STRIPE_SECRET_KEY');
+  const rows = (await listPurchases(env, user.id)) || [];
+  if (!/^(cs|pi)_[A-Za-z0-9_]+$/.test(id) || !rows.some((r) => r.ref === 'stripe:' + id)) throw new HttpError(404, 'That purchase was not found on your account.');
+  const path = id.startsWith('cs_') ? `/v1/checkout/sessions/${id}?expand[]=payment_intent.latest_charge` : `/v1/payment_intents/${id}?expand[]=latest_charge`;
+  const { res, data } = await stripe(env, path);
+  const intent = data && (id.startsWith('cs_') ? data.payment_intent : data);
+  const url = res.ok && intent && intent.latest_charge && intent.latest_charge.receipt_url;
+  if (!url) throw new HttpError(502, 'The receipt is not available right now. Try again shortly.', 'stripe');
+  return json({ url });
 }
 
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -173,6 +195,7 @@ export async function webhook(request, env) {
       // Keyed on the Stripe session id, so Stripe retrying the webhook can never add credits twice.
       // If this fails the error makes Stripe retry later.
       await addCredits(env, meta.user_id, credits, 'purchase', 'stripe:' + session.id);
+      if (session.amount_total > 0) await notePayment(env, 'stripe:' + session.id, session.amount_total).catch(() => {});
       // Bought with "auto top-up" ticked: the card was saved, so switch it on.
       if (meta.auto_pack && session.customer) await setAutoTopup(env, meta.user_id, meta.auto_pack, String(session.customer));
     }
