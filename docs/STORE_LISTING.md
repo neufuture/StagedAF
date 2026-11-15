@@ -27,11 +27,13 @@ UnitStager – Virtual Staging for AppFolio
 
 **Short description** (132 characters max)
 
-Virtually stage unit photos inside AppFolio. Furnish empty rooms in about a minute and replace the original in one click.
+Virtually stage unit photos without leaving AppFolio. Furnish empty rooms in about a minute and replace the original in one click.
 
 **Category:** Workflow & Planning (Chrome) / Productivity (Edge)
 
 **Detailed description**
+
+Virtually stage unit photos without leaving AppFolio.
 
 UnitStager adds virtual staging to the AppFolio pages you already use.
 
@@ -84,12 +86,14 @@ Virtually stage listing photos on AppFolio property and unit pages.
 Certify that data is not sold, not used for purposes unrelated to the
 extension's single purpose, and not used for creditworthiness or lending.
 
-## Images you need to supply
+## Images
 
-The stores want real screenshots, which have to come from your AppFolio:
+Ready to upload, in the `store/` folder:
 
-- **Screenshots:** 1280×800 (at least one, up to five). Good ones: the Stage
-  buttons on a unit's photos; the before/after review; the upload picker.
-  Crop or blur addresses and tenant names.
-- **Store icon:** 128×128. Use `icons/icon128.png`.
-- **Small promo tile** (Chrome, optional): 440×280.
+- `screenshot-1-stage-button.png`, `screenshot-2-before-after.png`,
+  `screenshot-3-in-appfolio.png` — 1280×800, in that order.
+- `promo-tile-440x280.png` — Chrome's optional small promo tile.
+- Store icon: `icons/icon128.png`.
+
+The screenshots show part of a street address in the photo file names
+("4919 NE 2…"). Swap them for ones from another unit if that matters.
