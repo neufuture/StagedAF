@@ -41,3 +41,11 @@ figure.example figcaption { color: var(--muted); font-size: 14px; margin-top: 10
 .card.pick { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .save { display: inline-block; font-size: 13px; font-weight: 700; color: var(--good); background: var(--good-bg); border-radius: 999px; padding: 2px 10px; margin-bottom: 8px; }
 .card p + p { margin-top: 6px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.pair figure { margin: 0; position: relative; }
+.pair img { display: block; width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line); box-shadow: 0 14px 40px rgba(22, 23, 26, 0.1); }
+.pair figcaption { position: absolute; left: 12px; top: 12px; }
+.tag { display: inline-block; background: rgba(22, 23, 26, 0.78); color: #fff; font-size: 13px; font-weight: 700; padding: 3px 11px; border-radius: 999px; }
+.tag.after { background: var(--accent); }
+.center { text-align: center; }
+@media (max-width: 640px) { .pair { grid-template-columns: 1fr; } }
