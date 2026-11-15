@@ -94,6 +94,8 @@ Ready to upload, in the `store/` folder:
   `screenshot-3-in-appfolio.png` — 1280×800, in that order.
 - `promo-tile-440x280.png` — Chrome's optional small promo tile.
 - Store icon: `icons/icon128.png`.
+- Logo files for anywhere else (social profiles, email signature) are in
+  `brand/`, as a rounded square and as a circle.
 
 The screenshots show part of a street address in the photo file names
 ("4919 NE 2…"). Swap them for ones from another unit if that matters.

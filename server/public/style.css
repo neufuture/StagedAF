@@ -9,7 +9,8 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 syst
 a { color: var(--accent); }
 .wrap { max-width: 960px; margin: 0 auto; padding: 0 20px; }
 header.top { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
-.brand { font-weight: 800; font-size: 20px; text-decoration: none; color: var(--text); }
+.brand { font-weight: 800; font-size: 20px; text-decoration: none; color: var(--text); display: inline-flex; align-items: center; }
+.brand img { display: block; margin-right: 9px; }
 .brand span { color: var(--accent); }
 nav a { margin-left: 18px; text-decoration: none; color: var(--muted); font-size: 15px; }
 nav a:hover { color: var(--text); }

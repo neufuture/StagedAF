@@ -39,3 +39,6 @@ h3 { font-size: 13px; margin: 20px 0 6px; }
 #history td { padding: 7px 8px 7px 0; border-top: 1px solid var(--line); }
 #history td:last-child { text-align: right; padding-right: 0; }
 #history button { padding: 3px 10px; font-size: 12.5px; }
+h1 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+h1 img { display: block; border-radius: 7px; }
+h1 span { margin-left: 0; }
