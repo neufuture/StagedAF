@@ -26,7 +26,7 @@
     let cls = 'chip';
     let label = '✦ Stage';
     if (job && job.meta.replacing) (cls += ' busy'), (label = 'Replacing…');
-    else if (job && (job.status === 'queued' || job.status === 'running')) (cls += ' busy'), (label = job.status === 'queued' ? 'Queued…' : 'Staging… ' + SAF.elapsed(job));
+    else if (job && (job.status === 'queued' || job.status === 'running')) (cls += ' busy'), (label = job.status === 'queued' ? 'Queued…' : `Staging… ${SAF.progress(job)}%`);
     else if (job && job.status === 'done') (cls += ' ready'), (label = 'Review staged');
     else if (job && job.status === 'error') (cls += ' failed'), (label = 'Failed — retry');
     if (chip.dataset.label === cls + label) return;
@@ -104,7 +104,7 @@
       { class: 'pop', role: 'dialog', 'aria-label': 'Stage this photo' },
       h('h3', null, busy ? 'Staging in progress' : 'Stage this photo'),
       busy
-        ? [h('p', { class: 'muted' }, job.status === 'queued' ? 'Waiting for another photo to finish first.' : `Sent to the image service ${SAF.elapsed(job)} ago. This usually takes 30 seconds to 2 minutes, and is stopped automatically at 5.`), h('div', { class: 'row end' }, h('button', { class: 'btn small danger', onclick: () => (SAF.removeJob(job), closePopover(), schedule()) }, 'Cancel staging'))]
+        ? [h('p', { class: 'muted' }, job.status === 'queued' ? 'Waiting for another photo to finish first.' : `About ${SAF.progress(job)}% done (an estimate; ${SAF.elapsed(job)} so far). Staging usually takes 30 seconds to 2 minutes, and is stopped automatically at 5.`), h('div', { class: 'row end' }, h('button', { class: 'btn small danger', onclick: () => (SAF.removeJob(job), closePopover(), schedule()) }, 'Cancel staging'))]
         : [
             job && job.status === 'error' && h('p', { class: 'err' }, job.error),
             !SAF.canStage() && h('p', { class: 'err' }, SAF.setupHint() + ' ', h('button', { class: 'link', onclick: SAF.openSettings }, 'Open settings')),

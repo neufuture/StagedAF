@@ -84,6 +84,7 @@
           const save = document.createElement('span');
           save.className = 'save';
           save.textContent = `Save ${p.save}%`;
+          save.title = `${p.save}% less per photo than the ${packList[0] ? packList[0].credits : 'smallest'}-credit pack`;
           b.append(save);
         }
         b.addEventListener('click', async () => {

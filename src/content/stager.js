@@ -166,7 +166,19 @@
     let result = SAF.dataUrlToBlob(out.dataUrl);
     if (s.disclosureLabel && s.disclosureText) result = await SAF.addLabel(result, s.disclosureText);
     job.resultBlob = result;
+    // Learn how long staging takes, to keep the progress estimate honest.
+    const took = Date.now() - (job.startedAt || Date.now());
+    if (took > 5000 && took < 300000) SAF.saveSetting('typicalMs', Math.round((Number(s.typicalMs) || 60000) * 0.7 + took * 0.3));
   }
+
+  // Estimated progress, 1–99%. The image service reports no real progress,
+  // so this is worked out from how long staging has usually taken: it reaches
+  // about 90% at the typical time and then slows, never showing 100 early.
+  SAF.progress = (job) => {
+    const typical = Math.max(15000, Number(SAF.settings.typicalMs) || 60000);
+    const t = Math.max(0, Date.now() - (job.startedAt || Date.now()));
+    return Math.min(99, Math.max(1, Math.round(100 * (1 - Math.exp((-2.3 * t) / typical)))));
+  };
 
   // "0:42" since the job started running.
   SAF.elapsed = (job) => {

@@ -20,7 +20,7 @@
     }
   }
 
-  const statusText = (job) => (job.status === 'running' ? 'Staging… ' + SAF.elapsed(job) : STATUS[job.status]);
+  const statusText = (job) => (job.status === 'running' ? `Staging… ${SAF.progress(job)}%` : STATUS[job.status]);
 
   function jobRow(job) {
     const actions = [];

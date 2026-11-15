@@ -34,6 +34,7 @@
     serverUrl: 'https://unitstager.com',
     session: null, // {access_token, refresh_token, expires_at, email} once signed in
     credits: null, // last known balance
+    typicalMs: 60000, // how long staging usually takes here; learned as photos finish
     autoPack: null, // pack id bought automatically when credits run low (null = off)
     maxInputEdge: 2048,
     concurrency: 2,
