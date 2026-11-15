@@ -4,6 +4,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startMock, stripeSign } from './mock-upstream.js';
 import { serve } from './serve.js';
+import { base } from '../src/supabase.js';
 
 let mock, app, state;
 const WH = 'whsec_test';
@@ -204,4 +205,11 @@ test('public bits: packs list, CORS preflight, website, unknown routes', async (
   const home = await fetch(app.url + '/');
   assert.equal(home.status, 200);
   assert.match(await home.text(), /UnitStager/);
+});
+
+test('SUPABASE_URL is accepted in the forms people paste', () => {
+  const want = 'https://abcdefgh.supabase.co';
+  for (const v of [want, want + '/', want + '/rest/v1/', ' ' + want + '/auth/v1 ', 'abcdefgh.supabase.co', 'https://supabase.com/dashboard/project/abcdefgh/settings/api'])
+    assert.equal(base({ SUPABASE_URL: v }), want, v);
+  assert.throws(() => base({ SUPABASE_URL: '' }), /SUPABASE_URL/);
 });

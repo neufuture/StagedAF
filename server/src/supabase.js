@@ -5,7 +5,21 @@
 //   SUPABASE_SECRET_KEY      – for the credits database; never leaves the server
 import { HttpError, requireEnv } from './http.js';
 
-const base = (env) => String(env.SUPABASE_URL).replace(/\/+$/, '');
+// The project's address, e.g. https://abcdefgh.supabase.co. Tolerates what
+// people actually paste: the Data API address (ending /rest/v1/), a missing
+// https://, stray spaces, or the dashboard link for the project.
+export function base(env) {
+  let raw = String(env.SUPABASE_URL || '').trim();
+  if (raw && !/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new HttpError(500, 'Server is not configured (SUPABASE_URL is not a web address).', 'config');
+  }
+  const dash = /^(?:www\.)?supabase\.com$/i.test(url.hostname) && /\/project\/([a-z0-9]+)/i.exec(url.pathname);
+  return dash ? `https://${dash[1]}.supabase.co` : url.origin;
+}
 
 async function parse(res) {
   try {
@@ -17,7 +31,7 @@ async function parse(res) {
 
 async function auth(env, path, { method = 'POST', body, token } = {}) {
   requireEnv(env, 'SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY');
-  const headers = { apikey: env.SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' };
+  const headers = { apikey: String(env.SUPABASE_PUBLISHABLE_KEY).trim(), 'Content-Type': 'application/json' };
   if (token) headers.Authorization = 'Bearer ' + token;
   const res = await fetch(base(env) + '/auth/v1' + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
   return { res, data: await parse(res) };
@@ -35,6 +49,7 @@ export async function sendCode(env, email) {
   const { res, data } = await auth(env, '/otp', { body: { email, create_user: true } });
   if (res.ok) return;
   if (res.status === 429) throw new HttpError(429, 'Too many sign-in emails. Wait a minute and try again.', 'rate-limit');
+  console.error('send code failed', res.status, JSON.stringify(data));
   throw new HttpError(res.status === 422 || res.status === 400 ? 400 : 502, (data && (data.msg || data.error_description || data.message)) || 'Could not send the sign-in email.');
 }
 
@@ -64,7 +79,7 @@ async function rpc(env, fn, args) {
   requireEnv(env, 'SUPABASE_URL', 'SUPABASE_SECRET_KEY');
   const res = await fetch(`${base(env)}/rest/v1/rpc/${fn}`, {
     method: 'POST',
-    headers: { apikey: env.SUPABASE_SECRET_KEY, Authorization: 'Bearer ' + env.SUPABASE_SECRET_KEY, 'Content-Type': 'application/json' },
+    headers: { apikey: String(env.SUPABASE_SECRET_KEY).trim(), Authorization: 'Bearer ' + String(env.SUPABASE_SECRET_KEY).trim(), 'Content-Type': 'application/json' },
     body: JSON.stringify(args),
   });
   const data = await parse(res);
