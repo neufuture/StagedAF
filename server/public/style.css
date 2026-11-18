@@ -46,7 +46,13 @@ figure.example { margin: 0 0 8px; }
 figure.example img { display: block; width: 100%; height: auto; border-radius: 16px; border: 1px solid var(--line); box-shadow: 0 18px 50px rgba(22, 23, 26, 0.12); }
 figure.example figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; text-align: center; }
 .card.pick { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.save { display: inline-block; font-size: 13px; font-weight: 700; color: var(--good); background: var(--good-bg); border-radius: 999px; padding: 2px 10px; margin-bottom: 8px; }
+.save { display: inline-block; font-size: 13px; font-weight: 700; color: var(--good); background: var(--good-bg); border-radius: 999px; padding: 2px 10px; }
+#packs { margin-top: 14px; }
+.price-card { position: relative; }
+/* The saving sits on the card's top edge, so every card's title and price line up. */
+.price-card .save { position: absolute; top: 0; left: 22px; transform: translateY(-50%); border: 1px solid #a7f3d0; padding: 3px 11px; white-space: nowrap; }
+.price-card .price { margin: 4px 0 2px; }
+.price-card p.each { color: var(--text); font-weight: 600; }
 .card p + p { margin-top: 6px; }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .pair figure { margin: 0; position: relative; }

@@ -25,14 +25,14 @@ if (pricing) {
       };
       const cards = [];
       if (free_credits > 0) {
-        const card = el('div', 'card');
-        card.append(el('h3', '', 'Try it'), el('div', 'price', 'Free'), el('p', '', `${free_credits} staged photos when you sign up. No card needed.`));
+        const card = el('div', 'card price-card');
+        card.append(el('h3', '', 'Try it'), el('div', 'price', 'Free'), el('p', 'each', `${free_credits} photos to start`), el('p', '', 'No card needed.'));
         cards.push(card);
       }
       for (const p of packs) {
-        const card = el('div', 'card');
+        const card = el('div', 'card price-card');
         if (p.save > 0) card.append(el('div', 'save', `Save ${p.save}%`));
-        card.append(el('h3', '', `${p.credits} photos`), el('div', 'price', money(p.amount)), el('p', '', `${money(p.each)} per staged photo.`), el('p', '', "Credits don't expire."));
+        card.append(el('h3', '', `${p.credits} photos`), el('div', 'price', money(p.amount)), el('p', 'each', `${money(p.each)} per photo`), el('p', '', "Credits don't expire."));
         cards.push(card);
       }
       pricing.replaceChildren(...cards);
