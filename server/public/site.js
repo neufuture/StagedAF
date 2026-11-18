@@ -84,3 +84,11 @@ if (menuBtn && siteNav) {
   document.addEventListener('click', (e) => !siteNav.contains(e.target) && setOpen(false));
   document.addEventListener('keydown', (e) => e.key === 'Escape' && (setOpen(false), menuBtn.focus()));
 }
+
+// Header: show a hairline under it once the page has scrolled.
+const topBar = document.querySelector('header.top');
+if (topBar) {
+  const mark = () => topBar.classList.toggle('scrolled', scrollY > 4);
+  addEventListener('scroll', mark, { passive: true });
+  mark();
+}
