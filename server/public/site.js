@@ -64,6 +64,6 @@ if (afterImg && stylePick) {
   });
   // Warm the cache for the small versions once the page has settled.
   addEventListener('load', () => setTimeout(() => {
-    for (const o of stylePick.options) if (o.value !== 'example-after') new Image().src = `/${o.value}-800.webp`;
+    for (const o of stylePick.options) if (!o.selected) new Image().src = `/${o.value}-800.webp`;
   }, 1500));
 }
