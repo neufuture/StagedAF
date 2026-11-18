@@ -67,3 +67,20 @@ if (afterImg && stylePick) {
     for (const o of stylePick.options) if (!o.selected) new Image().src = `/${o.value}-800.webp`;
   }, 1500));
 }
+
+// Mobile menu.
+const menuBtn = document.querySelector('.menu-btn');
+const siteNav = document.getElementById('site-nav');
+if (menuBtn && siteNav) {
+  const setOpen = (open) => {
+    siteNav.classList.toggle('open', open);
+    menuBtn.setAttribute('aria-expanded', String(open));
+  };
+  menuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setOpen(!siteNav.classList.contains('open'));
+  });
+  siteNav.addEventListener('click', (e) => e.target.closest('a') && setOpen(false));
+  document.addEventListener('click', (e) => !siteNav.contains(e.target) && setOpen(false));
+  document.addEventListener('keydown', (e) => e.key === 'Escape' && (setOpen(false), menuBtn.focus()));
+}
