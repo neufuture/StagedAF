@@ -40,3 +40,30 @@ if (pricing) {
     })
     .catch(() => {});
 }
+
+// "Select your style": swap the After photo between staged versions of the same room.
+const afterImg = document.getElementById('afterImg');
+const stylePick = document.getElementById('stylePick');
+if (afterImg && stylePick) {
+  stylePick.addEventListener('change', () => {
+    const opt = stylePick.selectedOptions[0];
+    const base = '/' + opt.value;
+    const next = new Image();
+    next.srcset = `${base}-800.webp 800w, ${base}.webp 1536w`;
+    next.sizes = afterImg.sizes;
+    afterImg.classList.add('swapping');
+    const show = () => {
+      afterImg.srcset = next.srcset;
+      afterImg.src = base + '.webp';
+      afterImg.alt = 'The same living room virtually staged in ' + opt.dataset.alt + '.';
+      afterImg.classList.remove('swapping');
+    };
+    next.onload = show;
+    next.onerror = show;
+    next.src = base + '.webp';
+  });
+  // Warm the cache for the small versions once the page has settled.
+  addEventListener('load', () => setTimeout(() => {
+    for (const o of stylePick.options) if (o.value !== 'example-after') new Image().src = `/${o.value}-800.webp`;
+  }, 1500));
+}

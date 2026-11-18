@@ -30,11 +30,21 @@
       <figcaption><span class="tag">Before</span></figcaption>
     </figure>
     <figure>
-      <img src="/example-after.webp" srcset="/example-after-800.webp 800w, /example-after.webp 1536w" sizes="(max-width: 640px) 100vw, 460px" width="1536" height="1024" alt="The same living room virtually staged with a grey sofa, two armchairs, a coffee table, rug, TV console, plants and wall art.">
+      <img id="afterImg" src="/example-after.webp" srcset="/example-after-800.webp 800w, /example-after.webp 1536w" sizes="(max-width: 640px) 100vw, 460px" width="1536" height="1024" alt="The same living room virtually staged in a Scandinavian style.">
       <figcaption><span class="tag after">After</span></figcaption>
+      <label class="style-pick">Select your style
+        <select id="stylePick">
+          <option value="example-after" data-alt="a Scandinavian style">Scandinavian</option>
+          <option value="style-modern" data-alt="a modern style">Modern</option>
+          <option value="style-farmhouse" data-alt="a modern farmhouse style">Modern farmhouse</option>
+          <option value="style-coastal" data-alt="a coastal style">Coastal</option>
+          <option value="style-industrial" data-alt="an industrial style">Industrial</option>
+          <option value="style-traditional" data-alt="a traditional style">Traditional</option>
+        </select>
+      </label>
     </figure>
   </div>
-  <p class="sub center">Same room, same walls, floors and windows. Only the furniture is added.</p>
+  <p class="sub center">Same room, same walls, floors and windows. Only the furniture is added — try another style.</p>
 
   <section id="how">
     <h2>How it works</h2>
