@@ -23,8 +23,13 @@ nav a:hover { color: var(--text); }
 .hero { padding: 18px 0 22px; }
 .hero h1 { font-size: clamp(32px, 5.2vw, 48px); line-height: 1.08; margin: 0 0 12px; letter-spacing: -0.02em; text-wrap: balance; }
 .hero p.lead { font-size: 19px; line-height: 1.5; color: var(--muted); max-width: 680px; margin: 0 0 18px; }
-.cta { display: inline-block; background: var(--accent); color: var(--accent-text); font-weight: 700; padding: 13px 22px; border-radius: 10px; text-decoration: none; }
-.cta.off { background: var(--soft); color: var(--text); cursor: default; }
+.ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+.cta { display: inline-flex; align-items: center; gap: 10px; background: var(--accent); color: var(--accent-text); font-weight: 700; padding: 11px 20px 11px 14px; border-radius: 12px; text-decoration: none; }
+.cta:hover { filter: brightness(1.08); }
+.cta .bicon { width: 26px; height: 26px; flex: none; background: #fff; border-radius: 50%; padding: 2px; }
+.cta small { font-weight: 600; font-size: 12px; opacity: .75; margin-left: 2px; }
+.cta.off { background: var(--soft); color: var(--text); cursor: default; filter: none; }
+.hero .sub b { color: var(--text); }
 .sub { color: var(--muted); font-size: 14px; margin-top: 10px; }
 section { padding: 40px 0; border-top: 1px solid var(--line); }
 h2 { font-size: 28px; margin: 0 0 20px; letter-spacing: -0.01em; }

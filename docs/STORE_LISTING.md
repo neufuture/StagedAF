@@ -16,8 +16,9 @@ Both review the submission before it goes live; allow a few days. Either
 store lets you publish as **unlisted** (only people with the link can find
 it), which suits a first group of testers.
 
-Once Chrome's listing is live, paste its link into `INSTALL_URL` at the top
-of `server/public/site.js` so the website's button works.
+Once each listing is live, paste its link into `STORE_URLS` at the top of
+`server/public/site.js` so the website's "Add to Chrome" and "Add to Edge"
+buttons work.
 
 ## Listing text
 

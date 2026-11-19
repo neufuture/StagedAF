@@ -1,12 +1,23 @@
-// Set this to the Chrome Web Store listing once the extension is published.
-const INSTALL_URL = '';
+// Store links. Paste each listing's URL in once it is published; until then
+// the button shows as "coming soon".
+const STORE_URLS = {
+  chrome: '',
+  edge: '',
+};
 
 for (const a of document.querySelectorAll('[data-install]')) {
-  if (INSTALL_URL) a.href = INSTALL_URL;
-  else {
+  const url = STORE_URLS[a.dataset.install];
+  if (url) {
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+  } else {
     a.classList.add('off');
     a.removeAttribute('href');
-    a.textContent = 'Chrome Web Store listing coming soon';
+    a.setAttribute('aria-disabled', 'true');
+    const soon = document.createElement('small');
+    soon.textContent = 'Coming soon';
+    a.append(soon);
   }
 }
 

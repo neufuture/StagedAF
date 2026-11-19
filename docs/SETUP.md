@@ -122,7 +122,7 @@ If something fails, the Worker's **Logs** tab in Cloudflare shows why.
 - [ ] Fill in the bracketed placeholders in `server/public/privacy.html` and
       have the page reviewed.
 - [ ] Publish the extension (see [`STORE_LISTING.md`](STORE_LISTING.md)), then put
-      its Chrome Web Store link in `INSTALL_URL` at the top of `server/public/site.js`.
+      the Chrome and Edge store links in `STORE_URLS` at the top of `server/public/site.js`.
 
 ## Day-to-day
 
