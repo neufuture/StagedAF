@@ -121,6 +121,20 @@ returns json language sql security definer set search_path = public as $$
   ) x;
 $$;
 
+-- Remember the Stripe customer for an account (first one wins), so receipts,
+-- saved cards and the customer portal all refer to the same customer.
+create or replace function public.set_stripe_customer(p_user uuid, p_customer text)
+returns text language plpgsql security definer set search_path = public as $$
+declare v text;
+begin
+  update accounts set stripe_customer = p_customer where user_id = p_user and stripe_customer is null;
+  select stripe_customer into v from accounts where user_id = p_user;
+  return v;
+end $$;
+
+revoke all on function public.set_stripe_customer(uuid, text) from public, anon, authenticated;
+grant execute on function public.set_stripe_customer(uuid, text) to service_role;
+
 revoke all on function public.note_payment(text, integer) from public, anon, authenticated;
 revoke all on function public.list_purchases(uuid) from public, anon, authenticated;
 grant execute on function public.note_payment(text, integer) to service_role;

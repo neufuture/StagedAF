@@ -1,7 +1,7 @@
 // Stripe: selling credit packs through Checkout, and the webhook that adds
 // the credits once a payment has gone through.
 import { HttpError, json, requireEnv } from './http.js';
-import { addCredits, claimAutoTopup, getAccount, listPurchases, notePayment, setAutoTopup } from './supabase.js';
+import { addCredits, claimAutoTopup, getAccount, listPurchases, notePayment, setAutoTopup, setStripeCustomer } from './supabase.js';
 
 // Credit packs. `amount` is in cents. Override with the PACKS variable (JSON, same shape).
 const DEFAULT_PACKS = [
@@ -48,16 +48,19 @@ async function stripe(env, path, { params, idempotencyKey } = {}) {
 
 // Start a purchase. With `auto`, the card is also saved (Stripe shows the
 // customer a notice) so the same pack can be bought again automatically.
-export async function createCheckout(request, env, user, packId, auto) {
+// `from` says where to send the customer afterwards: the website's account
+// page ('web') or the thank-you page that points back to the extension.
+export async function createCheckout(request, env, user, packId, auto, from) {
   requireEnv(env, 'STRIPE_SECRET_KEY');
   const pack = packs(env).find((p) => p.id === packId);
   if (!pack) throw new HttpError(400, 'Unknown credit pack.');
   const site = siteUrl(env, request);
+  const web = from === 'web';
   const params = {
     mode: 'payment',
     client_reference_id: user.id,
-    success_url: site + '/thanks.html',
-    cancel_url: site + '/#pricing',
+    success_url: web ? site + '/account.html?paid=1' : site + '/thanks.html',
+    cancel_url: web ? site + '/account.html' : site + '/#pricing',
     'metadata[user_id]': user.id,
     'metadata[credits]': String(pack.credits),
     'metadata[pack]': pack.id,
@@ -66,18 +69,49 @@ export async function createCheckout(request, env, user, packId, auto) {
     'line_items[0][price_data][unit_amount]': String(pack.amount),
     'line_items[0][price_data][product_data][name]': 'UnitStager – ' + (pack.name || pack.credits + ' credits'),
   };
-  const account = auto ? await getAccount(env, user.id) : null;
+  // Reuse the customer on file, or have Stripe create one, so every purchase,
+  // receipt and saved card belongs to the same Stripe customer.
+  const account = await getAccount(env, user.id).catch(() => null);
   if (account && account.stripe_customer) params.customer = account.stripe_customer;
-  else if (user.email) params.customer_email = user.email;
+  else {
+    if (user.email) params.customer_email = user.email;
+    params.customer_creation = 'always';
+  }
   if (auto) {
     params['metadata[auto_pack]'] = pack.id;
     params['payment_intent_data[setup_future_usage]'] = 'off_session';
-    if (!params.customer) params.customer_creation = 'always';
   }
   const { res, data } = await stripe(env, '/v1/checkout/sessions', { params });
   if (!res.ok || !data || !data.url) {
     console.error('stripe checkout failed', res.status, data && data.error && data.error.message);
     throw new HttpError(502, 'Could not start checkout. Try again shortly.', 'stripe');
+  }
+  return json({ url: data.url });
+}
+
+// Stripe's customer portal: add, remove or change saved cards, and see past
+// payments. Creates the Stripe customer first if this account has none yet.
+export async function billingPortal(request, env, user) {
+  requireEnv(env, 'STRIPE_SECRET_KEY');
+  const account = (await getAccount(env, user.id)) || {};
+  let customer = account.stripe_customer;
+  if (!customer) {
+    const params = { 'metadata[user_id]': user.id };
+    if (user.email) params.email = user.email;
+    const made = await stripe(env, '/v1/customers', { params, idempotencyKey: 'customer-' + user.id });
+    if (!made.res.ok || !made.data || !made.data.id) {
+      console.error('stripe customer create failed', made.res.status, made.data && made.data.error && made.data.error.message);
+      throw new HttpError(502, 'Could not open payment settings. Try again shortly.', 'stripe');
+    }
+    customer = await setStripeCustomer(env, user.id, made.data.id);
+  }
+  const { res, data } = await stripe(env, '/v1/billing_portal/sessions', { params: { customer, return_url: siteUrl(env, request) + '/account.html' } });
+  if (!res.ok || !data || !data.url) {
+    const msg = (data && data.error && data.error.message) || '';
+    console.error('stripe portal failed', res.status, msg);
+    // Stripe refuses until the portal has been set up once in its dashboard.
+    if (/configuration/i.test(msg)) throw new HttpError(503, 'Payment settings are not switched on yet. Please email hello@unitstager.com.', 'portal-config');
+    throw new HttpError(502, 'Could not open payment settings. Try again shortly.', 'stripe');
   }
   return json({ url: data.url });
 }
@@ -196,6 +230,7 @@ export async function webhook(request, env) {
       // If this fails the error makes Stripe retry later.
       await addCredits(env, meta.user_id, credits, 'purchase', 'stripe:' + session.id);
       if (session.amount_total > 0) await notePayment(env, 'stripe:' + session.id, session.amount_total).catch(() => {});
+      if (session.customer) await setStripeCustomer(env, meta.user_id, String(session.customer)).catch(() => {});
       // Bought with "auto top-up" ticked: the card was saved, so switch it on.
       if (meta.auto_pack && session.customer) await setAutoTopup(env, meta.user_id, meta.auto_pack, String(session.customer));
     }

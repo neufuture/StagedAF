@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test test/api.test.js",
+    "test:site": "node test/site.e2e.js",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev"
   },

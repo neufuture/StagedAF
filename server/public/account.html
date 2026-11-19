@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Account – UnitStager</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="appbody">
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="/"><img src="/logo.svg" width="30" height="30" alt="">Unit<span>Stager</span></a>
+    <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path class="l1" d="M3 6h16"/><path class="l2" d="M3 11h16"/><path class="l3" d="M3 16h16"/></svg>
+    </button>
+    <nav id="site-nav"><a href="/app.html">Studio</a><a href="/account.html" aria-current="page">Account</a><a href="#" id="signOut" hidden>Sign out</a></nav>
+  </header>
+  <main id="main">
+    <div id="gate"></div>
+    <section id="account" hidden>
+      <h1>Account</h1>
+      <p class="muted">Signed in as <b id="who"></b></p>
+      <p id="paid" class="msg ok" hidden>Thanks — your payment went through. Your credits are added within a few seconds.</p>
+      <div class="acct-grid">
+        <div class="card balance-card">
+          <h2>Credits</h2>
+          <div class="big" id="balance">–</div>
+          <p class="muted">One credit stages one photo. Failed stagings are refunded automatically.</p>
+          <a class="btn primary" href="/app.html">Stage photos</a>
+        </div>
+        <div class="card">
+          <h2>Top up</h2>
+          <div class="packs" id="packs2"></div>
+          <label class="check" id="autoRow"><input id="autoBox" type="checkbox"> <span>Auto top-up: save my card and buy the same pack again when I'm down to <span class="thr">3</span> credits.</span></label>
+          <p id="autoOn" hidden>Auto top-up is <b>on</b>: <span id="autoWhat"></span> when you're down to <span class="thr">3</span> credits. <button class="btn small" id="autoOff" type="button">Turn off</button></p>
+        </div>
+        <div class="card">
+          <h2>Payment methods</h2>
+          <p class="muted">Add, remove or change the cards saved on your account, and see past payments. This opens Stripe's secure page.</p>
+          <button class="btn" id="portal" type="button">Manage payment methods</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Transactions</h2>
+        <table class="tx" id="tx"><thead><tr><th>Date</th><th>What</th><th>Amount</th><th></th></tr></thead><tbody></tbody></table>
+        <p class="muted" id="txEmpty" hidden>No purchases yet.</p>
+      </div>
+      <p id="acctMsg" class="msg" role="status"></p>
+    </section>
+  </main>
+</div>
+<script src="/site.js"></script>
+<script src="/js/session.js"></script>
+<script src="/js/signin.js"></script>
+<script src="/js/account.js"></script>
+</body>
+</html>

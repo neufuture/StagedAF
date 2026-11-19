@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio – UnitStager</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="appbody">
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="/"><img src="/logo.svg" width="30" height="30" alt="">Unit<span>Stager</span></a>
+    <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path class="l1" d="M3 6h16"/><path class="l2" d="M3 11h16"/><path class="l3" d="M3 16h16"/></svg>
+    </button>
+    <nav id="site-nav"><a href="/app.html" aria-current="page">Studio</a><a href="/account.html">Account</a><a href="#" id="signOut" hidden>Sign out</a></nav>
+  </header>
+  <main id="main">
+    <div id="gate"></div>
+    <section id="studio" hidden>
+      <div class="bar">
+        <h1>Stage your photos</h1>
+        <a class="credits" href="/account.html" id="credits" title="Your credits">… credits</a>
+      </div>
+      <label class="drop" id="drop">
+        <input id="files" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+        <span class="drop-icon" aria-hidden="true">＋</span>
+        <b>Drop photos here</b> or click to choose
+        <span class="muted">JPEG, PNG or WebP · one credit per staged photo</span>
+      </label>
+      <p id="addMsg" class="msg" role="status"></p>
+      <div class="opts" id="opts" hidden>
+        <label>Style
+          <select id="style">
+            <option value="modern">Modern</option><option value="Scandinavian">Scandinavian</option><option value="mid-century modern">Mid-century modern</option>
+            <option value="transitional">Transitional</option><option value="modern farmhouse">Modern farmhouse</option><option value="coastal">Coastal</option>
+            <option value="industrial">Industrial</option><option value="traditional">Traditional</option>
+          </select>
+        </label>
+        <label class="grow">Specific instructions <span class="muted">(optional)</span>
+          <textarea id="custom" rows="2" maxlength="600" placeholder="e.g. sectional facing the window, warm neutrals, keep the floor mostly clear"></textarea>
+        </label>
+        <label class="check"><input id="label" type="checkbox"> Add a “Virtually staged” label</label>
+        <div class="go">
+          <button class="btn primary" id="stageBtn" type="button">Stage photos</button>
+          <span id="goMsg" class="msg" role="status"></span>
+        </div>
+      </div>
+      <div class="tiles" id="tiles"></div>
+      <div class="after-all" id="afterAll" hidden><button class="btn" id="downloadAll" type="button">Download all staged photos</button> <button class="btn" id="clearDone" type="button">Clear finished</button></div>
+    </section>
+  </main>
+</div>
+<script src="/site.js"></script>
+<script src="/js/session.js"></script>
+<script src="/js/signin.js"></script>
+<script src="/js/studio.js"></script>
+</body>
+</html>

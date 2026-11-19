@@ -6,8 +6,9 @@
 //   GET  /api/me                                     -> email, credits, packs
 //   GET  /api/packs                                  -> packs (public, for the website)
 //   POST /api/stage          multipart photo         -> staged photo (costs 1 credit)
-//   POST /api/checkout       {pack, auto?}           -> Stripe Checkout URL
+//   POST /api/checkout       {pack, auto?, from?}    -> Stripe Checkout URL
 //   POST /api/auto-topup     {enabled:false}         turn auto top-up off
+//   POST /api/billing-portal                         -> Stripe portal URL (saved cards, payments)
 //   GET  /api/purchases                              -> the account's purchases
 //   POST /api/receipt        {id}                    -> Stripe receipt URL for one purchase
 //   POST /api/stripe/webhook                         Stripe -> add purchased credits
@@ -15,7 +16,7 @@
 // Everything else is the static website in ./public.
 import { CORS, HttpError, json, readJson } from './http.js';
 import { stage } from './stage.js';
-import { AUTO_THRESHOLD, createCheckout, publicPacks, purchases, receipt, webhook } from './stripe.js';
+import { AUTO_THRESHOLD, billingPortal, createCheckout, publicPacks, purchases, receipt, webhook } from './stripe.js';
 import { ensureAccount, getAccount, refreshSession, requireUser, sendCode, setAutoTopup, verifyCode } from './supabase.js';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -48,7 +49,7 @@ async function api(request, env, path, ctx) {
       const credits = await ensureAccount(env, user);
       // Tolerate a database that has not had the latest schema.sql run yet.
       const account = (await getAccount(env, user.id).catch(() => null)) || {};
-      return json({ email: user.email, credits, packs: publicPacks(env), auto: { pack: account.auto_pack || null, threshold: AUTO_THRESHOLD } });
+      return json({ email: user.email, credits, packs: publicPacks(env), auto: { pack: account.auto_pack || null, threshold: AUTO_THRESHOLD }, has_billing: !!account.has_card });
     }
     case 'GET /api/packs':
       return json({ packs: publicPacks(env), free_credits: Number(env.FREE_CREDITS ?? 10) || 0, auto_threshold: AUTO_THRESHOLD });
@@ -57,8 +58,10 @@ async function api(request, env, path, ctx) {
     case 'POST /api/checkout': {
       const user = await requireUser(env, request);
       const body = await readJson(request);
-      return createCheckout(request, env, user, String(body.pack || ''), body.auto === true);
+      return createCheckout(request, env, user, String(body.pack || ''), body.auto === true, body.from === 'web' ? 'web' : 'extension');
     }
+    case 'POST /api/billing-portal':
+      return billingPortal(request, env, await requireUser(env, request));
     case 'GET /api/purchases':
       return purchases(env, await requireUser(env, request));
     case 'POST /api/receipt': {

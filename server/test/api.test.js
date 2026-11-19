@@ -175,6 +175,7 @@ test('buying credits: checkout session, then the webhook adds credits exactly on
   assert.equal(created.params['line_items[0][price_data][unit_amount]'], '1900');
   assert.equal(created.params.success_url, 'https://unitstager.com/thanks.html');
   assert.equal(created.params.customer_email, 'buyer@example.com');
+  assert.equal(created.params.customer_creation, 'always', 'every purchase gets a Stripe customer');
 
   const event = JSON.stringify({ type: 'checkout.session.completed', data: { object: { id: created.id, payment_status: 'paid', metadata: { user_id: s.user.id, credits: '25' } } } });
   const post = (payload, sig) => call('/api/stripe/webhook', { method: 'POST', raw: payload, headers: { 'Stripe-Signature': sig } });
@@ -311,4 +312,44 @@ test('purchase history: lists own purchases with amounts, and links to Stripe re
   assert.equal((await call('/api/receipt', { method: 'POST', token: a.access_token, body: { id: '../customers' } })).status, 404);
   assert.equal((await call('/api/purchases')).status, 401);
   assert.equal((await call('/api/receipt', { method: 'POST', body: { id: 'cs_hist_1' } })).status, 401);
+});
+
+test('website checkout returns to the account page; extension checkout to the thank-you page', async () => {
+  const s = await signIn('webbuyer@example.com');
+  await call('/api/checkout', { method: 'POST', token: s.access_token, body: { pack: 'pack25', from: 'web' } });
+  assert.equal(state.stripe.at(-1).params.success_url, 'https://unitstager.com/account.html?paid=1');
+  assert.equal(state.stripe.at(-1).params.cancel_url, 'https://unitstager.com/account.html');
+  await call('/api/checkout', { method: 'POST', token: s.access_token, body: { pack: 'pack25' } });
+  assert.equal(state.stripe.at(-1).params.success_url, 'https://unitstager.com/thanks.html');
+});
+
+test('a paid purchase remembers the Stripe customer, and later checkouts reuse it', async () => {
+  const s = await signIn('remember@example.com');
+  await call('/api/checkout', { method: 'POST', token: s.access_token, body: { pack: 'pack25' } });
+  const id = state.stripe.at(-1).id;
+  const event = JSON.stringify({ type: 'checkout.session.completed', data: { object: { id, customer: 'cus_remember', payment_status: 'paid', amount_total: 1900, metadata: { user_id: s.user.id, credits: '25' } } } });
+  assert.equal((await call('/api/stripe/webhook', { method: 'POST', raw: event, headers: { 'Stripe-Signature': stripeSign(event, WH) } })).status, 200);
+  assert.equal((await call('/api/me', { token: s.access_token })).data.auto.pack, null, 'an ordinary purchase does not switch on auto top-up');
+  await call('/api/checkout', { method: 'POST', token: s.access_token, body: { pack: 'pack50' } });
+  assert.equal(state.stripe.at(-1).params.customer, 'cus_remember');
+  assert.equal(state.stripe.at(-1).params.customer_creation, undefined);
+});
+
+test('payment settings: opens the Stripe portal, creating the customer once if needed', async () => {
+  const s = await signIn('portal@example.com');
+  const r1 = await call('/api/billing-portal', { method: 'POST', token: s.access_token });
+  assert.equal(r1.status, 200);
+  assert.equal(r1.data.url, 'https://billing.stripe.test/p/session/cus_new_1');
+  assert.equal(state.customers.length, 1);
+  assert.equal(state.customers[0].params.email, 'portal@example.com');
+  assert.equal(state.portals.at(-1).return_url, 'https://unitstager.com/account.html');
+  const r2 = await call('/api/billing-portal', { method: 'POST', token: s.access_token });
+  assert.equal(r2.data.url, 'https://billing.stripe.test/p/session/cus_new_1');
+  assert.equal(state.customers.length, 1, 'no second customer');
+  state.portalNotConfigured = true;
+  const r3 = await call('/api/billing-portal', { method: 'POST', token: s.access_token });
+  state.portalNotConfigured = false;
+  assert.equal(r3.status, 503);
+  assert.equal(r3.data.code, 'portal-config');
+  assert.equal((await call('/api/billing-portal', { method: 'POST' })).status, 401);
 });

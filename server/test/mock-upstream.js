@@ -60,6 +60,12 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
       a.lastAt = Date.now();
       return { pack: a.pack, customer: a.customer, stamp: a.lastAt };
     },
+    set_stripe_customer({ p_user, p_customer }) {
+      const a = state.auto.get(p_user) || { pack: null };
+      if (!a.customer) a.customer = p_customer;
+      state.auto.set(p_user, a);
+      return a.customer;
+    },
     note_payment({ p_ref, p_cents }) {
       const row = state.ledger.find((l) => l.ref === p_ref);
       if (row) row.amount_cents = p_cents;
@@ -124,6 +130,23 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
       }
       if (/^\/v1\/payment_intents\/pi_/.test(p) && req.method === 'GET') {
         return send(200, { id: p.split('/').pop(), latest_charge: { receipt_url: 'https://pay.stripe.test/receipts/' + p.split('/').pop() } });
+      }
+      if (p === '/v1/customers' && req.method === 'POST') {
+        const params = Object.fromEntries(new URLSearchParams(raw.toString()));
+        const key = req.headers['idempotency-key'];
+        state.customers = state.customers || [];
+        const seen = state.customers.find((c) => c.key === key);
+        if (seen) return send(200, { id: seen.id });
+        const id = 'cus_new_' + (state.customers.length + 1);
+        state.customers.push({ id, key, params });
+        return send(200, { id });
+      }
+      if (p === '/v1/billing_portal/sessions') {
+        const params = Object.fromEntries(new URLSearchParams(raw.toString()));
+        state.portals = state.portals || [];
+        state.portals.push(params);
+        if (state.portalNotConfigured) return send(400, { error: { message: 'No configuration provided and your test mode default configuration has not been created.' } });
+        return send(200, { url: 'https://billing.stripe.test/p/session/' + params.customer });
       }
       if (p === '/v1/payment_intents') {
         const params = Object.fromEntries(new URLSearchParams(raw.toString()));

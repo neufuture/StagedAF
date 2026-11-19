@@ -135,9 +135,19 @@ under `vars`. Free sign-up credits are `FREE_CREDITS`. The packs default to
 "PACKS": "[{\"id\":\"pack25\",\"name\":\"25 staged photos\",\"credits\":25,\"amount\":1900},{\"id\":\"pack50\",\"name\":\"50 staged photos\",\"credits\":50,\"amount\":3400},{\"id\":\"pack100\",\"name\":\"100 staged photos\",\"credits\":100,\"amount\":5900}]"
 ```
 
-**After a server update that changes the database.** Run
+**After a server update that changes the database.** (Most recently: the
+website account pages.) Run
 `server/supabase/schema.sql` again in the Supabase SQL Editor. It is written
 to be run repeatedly and never removes data.
+
+**Payment methods (Stripe customer portal).** The website's Account page has
+a **Manage payment methods** button that opens Stripe's own page, where
+customers add, remove or change saved cards and see past payments. Stripe
+only allows this once you have switched it on: in Stripe go to **Settings →
+Billing → Customer portal**, turn on **Customers can update payment methods**
+(and, if you like, **view invoice/payment history**), and click **Save**. Do it
+in test mode and again in live mode. Until then the button shows a message
+asking customers to email you.
 
 **Receipts.** Customers see their purchases under **Purchase history** in
 the extension's settings, each with a link to its Stripe receipt. To also

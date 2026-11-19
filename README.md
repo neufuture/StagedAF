@@ -114,10 +114,11 @@ src/content/review.js     before/after review, replace routine
 src/content/dock.js       the corner panel
 src/options.*             settings page (account, credits, behaviour)
 server/src/               the API: sign-in, credits, staging, Stripe
-server/public/            the website
+server/public/            the website: homepage, studio (app.html), account page
 server/supabase/schema.sql  accounts and credits tables
 docs/SETUP.md             how to deploy the server
 docs/STORE_LISTING.md     publishing to the Chrome and Edge stores
+docs/IDEAS.md             ideas saved for later
 scripts/package.sh        builds the store upload package into dist/
 ```
 
@@ -133,6 +134,10 @@ cd server && npm test                 # server API against mock Supabase / Strip
 
 ```bash
 bash server/test/schema.test.sh       # credit rules against a throwaway Postgres
+```
+
+```bash
+cd server && npm run test:site        # website sign-up, studio and account pages in a real browser
 ```
 
 All three use stand-ins for AppFolio, Supabase, Stripe and the image service;
