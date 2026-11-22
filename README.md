@@ -1,7 +1,8 @@
 # UnitStager — virtual staging for AppFolio
 
-A Chrome / Edge extension that virtually stages listing photos inside AppFolio
-property and unit pages. Users sign in with an email and pay per staged photo.
+UnitStager is created and owned by Neufuture, LLC. It is a Chrome / Edge
+extension that virtually stages listing photos inside AppFolio property and
+unit pages. Users sign in with an email and pay per staged photo.
 
 ## What it does
 
@@ -142,3 +143,7 @@ cd server && npm run test:site        # website sign-up, studio and account page
 
 All three use stand-ins for AppFolio, Supabase, Stripe and the image service;
 none of them touches the real services.
+
+---
+
+© 2026 Neufuture, LLC. All rights reserved. See [LICENSE](LICENSE).

@@ -6,6 +6,11 @@ Everything below is bundled in one download, `dist/unitstager-store-kit-<version
 goes to both stores. Rebuild it after any change with `bash scripts/package.sh`
 (bump `"version"` in `manifest.json` first; stores reject a repeated version).
 
+## Publisher name
+
+Use **Neufuture, LLC** as the publisher / developer name in both stores, exactly
+as it appears on the company's registration documents.
+
 ## Where to upload
 
 - **Chrome Web Store:** chrome.google.com/webstore/devconsole. Needs a
@@ -57,8 +62,8 @@ which empty rooms to furnish before anything is sent to AppFolio.
 Sign in with your email to get free staged photos. After that it is pay per
 photo, with credit packs that don't expire and optional auto top-up.
 
-UnitStager is an independent product and is not affiliated with or endorsed
-by AppFolio, Inc.
+UnitStager is created by Neufuture, LLC. It is an independent product and is
+not affiliated with or endorsed by AppFolio, Inc.
 
 **Privacy policy URL:** https://unitstager.com/privacy.html
 
