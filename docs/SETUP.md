@@ -139,8 +139,9 @@ If something fails, the Worker's **Logs** tab in Cloudflare shows why.
       key, create the webhook again in live mode, and replace
       `STRIPE_WEBHOOK_SECRET`.
 - [ ] Connect a real email service in Supabase (step 2).
-- [ ] Fill in the bracketed placeholders in `server/public/privacy.html` and
-      have the page reviewed.
+- [ ] Have `server/public/privacy.html` and `server/public/terms.html` reviewed
+      by a lawyer. In particular, check the refund policy (section 3) and the
+      choice of Oregon law (section 12) in the terms.
 - [ ] Publish the extension (see [`STORE_LISTING.md`](STORE_LISTING.md)), then put
       the Chrome and Edge store links in `STORE_URLS` at the top of `server/public/site.js`.
 

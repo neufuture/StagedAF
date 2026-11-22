@@ -17,6 +17,7 @@
           <button class="btn primary" type="submit">Continue</button>
         </form>
         <p id="siMsg" class="msg" role="status"></p>
+        <p class="muted legal">By continuing you agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
       </div>`;
     const $ = (id) => box.querySelector('#' + id);
     const promo = US.pendingPromo();
