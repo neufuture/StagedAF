@@ -1,7 +1,7 @@
 // Store links. Paste each listing's URL in once it is published; until then
 // the button shows as "coming soon".
 const STORE_URLS = {
-  chrome: '',
+  chrome: 'https://chromewebstore.google.com/detail/ijcjfigoikihikjnaeenjefjoeemhmhm',
   edge: '',
 };
 
