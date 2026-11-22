@@ -202,6 +202,8 @@ server redeploys.
 | `TURNSTILE_REQUIRED` | Text | off | `true` refuses sign-in without the check. Leave off until everyone has an extension version with it (1.2.0+) |
 | `RESEND_API_KEY` | Secret | — | Sends alert and daily-summary emails (a Resend key with sending access) |
 | `ALERT_EMAIL` | Text | — | Where alerts go, e.g. `hello@unitstager.com` (comma-separate several) |
+| `BUSINESS_ADDRESS` | Text | — | Postal address (or PO box) printed in follow-up emails; required by US law for marketing email, and none are sent without it |
+| `NUDGES` | Text | on | `off` stops all follow-up emails |
 | `ALERT_DAILY_COST_USD` | Text | 25 | Email when estimated image spend in a day passes this |
 | `DAILY_STAGING_CAP` | Text | off | Stop new stagings after this many in a day (safety valve) |
 | `FREE_CREDITS` | (in wrangler.jsonc) | 10 | Free credits per new account |
@@ -217,6 +219,14 @@ server redeploys.
 name it UnitStager, add hostname `unitstager.com`, choose **Managed** mode,
 and create it. Copy the **site key** into `TURNSTILE_SITE_KEY` and the
 **secret key** into `TURNSTILE_SECRET_KEY`.
+
+**Follow-up emails** go out with the daily run (15:07 UTC) through Resend,
+once per kind per customer: a reminder 1 day and 4 days after sign-up if no
+photo has been staged, a "get more credits" note a day after running out (if
+they've never bought), and a "vacancy coming up?" note 30 days after a buyer's
+last staging. They come from hello@unitstager.com, replies go to
+hello@unitstager.com, and each has a one-click unsubscribe. The daily summary
+counts how many went out. Needs `RESEND_API_KEY` and `BUSINESS_ADDRESS`.
 
 **Alerts** arrive at most once an hour per kind (once a day for spend and the
 daily cap): a limit was reached, stagings are failing, an auto top-up was

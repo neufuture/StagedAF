@@ -28,7 +28,7 @@ export async function alert(env, key, subject, text, every = 60) {
 
 const usd = (n) => '$' + Number(n || 0).toFixed(2);
 
-export async function dailySummary(env) {
+export async function dailySummary(env, extra = {}) {
   const s = (await rpc(env, 'period_stats', { p_hours: 24 })) || {};
   const hits = Object.entries(s.limit_hits || {}).map(([k, n]) => `  ${k.replace(/^hit:/, '')}: ${n}`).join('\n') || '  none';
   const revenue = (s.revenue_cents || 0) / 100;
@@ -40,6 +40,7 @@ Stagings:          ${s.stagings_done || 0} done, ${s.stagings_failed || 0} faile
 Image cost (est.): ${usd(s.cost_usd)}${s.avg_cost_usd != null ? ` (avg ${usd(s.avg_cost_usd)} per photo)` : ''}
 Revenue:           ${usd(revenue)} from ${s.purchases || 0} purchase(s), before Stripe fees
 Credits unused:    ${s.credits_unused || 0} across all accounts
+Follow-up emails:  ${extra.nudged || 0} sent today
 
 Limits hit:
 ${hits}

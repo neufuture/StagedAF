@@ -608,3 +608,56 @@ test('cost tracking, spend alert, daily cap and daily summary', async () => {
     capped.close();
   }
 });
+
+test('follow-up emails: one per kind, with unsubscribe and address; unsubscribe link works', async () => {
+  const base = { SUPABASE_URL: mock.url, SUPABASE_PUBLISHABLE_KEY: 'pub-key', SUPABASE_SECRET_KEY: 'secret-key', RESEND_API_KEY: 're_test', RESEND_BASE: mock.url, SITE_URL: 'https://unitstager.com' };
+  const u1 = 'bbbbbbbb-0000-4000-8000-000000000001', u2 = 'bbbbbbbb-0000-4000-8000-000000000002';
+  state.nudgeCandidates = [
+    { user_id: u1, email: 'new@example.com', credits: 10, kind: 'stage-1' },
+    { user_id: u2, email: 'spent@example.com', credits: 0, kind: 'buy-2' },
+  ];
+  // Without a postal address nothing is sent (CAN-SPAM needs one).
+  const noAddr = await serve(base);
+  state.emails_sent.length = 0;
+  try {
+    await noAddr.cron('7 15 * * *');
+    await noAddr.idle();
+    assert.equal(state.emails_sent.filter((e) => e.to[0] !== undefined && !/Daily summary/.test(e.subject)).length, 0, 'no address, no follow-ups');
+  } finally {
+    noAddr.close();
+  }
+  const srv = await serve({ ...base, BUSINESS_ADDRESS: 'PO Box 123, Portland, OR 97201', ALERT_EMAIL: 'owner@example.com' });
+  state.emails_sent.length = 0;
+  try {
+    await srv.cron('7 15 * * *');
+    await srv.idle();
+    const sent = state.emails_sent.filter((e) => !/Daily summary/.test(e.subject));
+    assert.deepEqual(sent.map((e) => [e.to[0], e.subject]), [['new@example.com', 'Your 10 free staged photos are waiting'], ['spent@example.com', "You've used your free photos"]]);
+    const m = sent[0];
+    assert.equal(m.reply_to, 'hello@unitstager.com');
+    assert.match(m.text, /PO Box 123, Portland, OR 97201/);
+    assert.match(m.text, /utm_campaign=stage-1/);
+    assert.match(m.html, /Unsubscribe/);
+    const unsub = /<(https:\/\/unitstager\.com\/api\/unsubscribe\?[^>]+)>/.exec(m.headers['List-Unsubscribe'])[1];
+    assert.equal(m.headers['List-Unsubscribe-Post'], 'List-Unsubscribe=One-Click');
+    assert.match(state.emails_sent.find((e) => /Daily summary/.test(e.subject)).text, /Follow-up emails: +2 sent today/);
+
+    // Run again: nothing is sent twice.
+    state.emails_sent.length = 0;
+    await srv.cron('7 15 * * *');
+    await srv.idle();
+    assert.equal(state.emails_sent.filter((e) => !/Daily summary/.test(e.subject)).length, 0, 'each follow-up goes once');
+
+    // Unsubscribe: a forged link is refused; the real one works (page and one-click POST).
+    const path = new URL(unsub).pathname + new URL(unsub).search;
+    assert.equal((await fetch(srv.url + path.replace(/t=[0-9a-f]+/, 't=' + '0'.repeat(32)))).status, 400);
+    const page = await fetch(srv.url + path);
+    assert.equal(page.status, 200);
+    assert.match(await page.text(), /unsubscribed/);
+    assert.ok(state.optedOut.has(u1));
+    assert.equal((await fetch(srv.url + path, { method: 'POST' })).status, 204);
+  } finally {
+    srv.close();
+    state.nudgeCandidates = [];
+  }
+});

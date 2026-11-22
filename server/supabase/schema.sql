@@ -450,5 +450,71 @@ begin
   end loop;
 end $$;
 
+-- ---------------------------------------------------------------------------
+-- Follow-up emails ("nudges"): each kind is sent to an account at most once,
+-- never to accounts that unsubscribed.
+
+alter table public.accounts add column if not exists emails_off boolean not null default false;
+create table if not exists public.nudges_sent (
+  user_id uuid not null references public.accounts (user_id) on delete cascade,
+  kind    text not null,
+  sent_at timestamptz not null default now(),
+  primary key (user_id, kind)
+);
+alter table public.nudges_sent enable row level security;
+
+-- Who should get which follow-up today. Stagings are read from the credit
+-- ledger (kept for good), not the stagings table (emptied after 30 days).
+--   stage-1   signed up 20 h – 3 days ago, credits left, never staged
+--   stage-4   signed up 4 – 8 days ago, credits left, never staged
+--   buy-2     staged, now out of credits for a day or more, never bought, no auto top-up
+--   return-30 has bought, last staging 30 – 45 days ago
+create or replace function public.nudge_candidates(p_limit integer)
+returns json language sql security definer set search_path = public as $$
+  with st as (select user_id, max(created_at) as last_stage from credit_ledger where reason = 'stage' group by user_id),
+  paid as (select distinct user_id from credit_ledger where reason in ('purchase', 'auto-topup')),
+  c as (
+    select a.user_id, a.email, a.credits, 'stage-1' as kind from accounts a left join st using (user_id)
+      where st.user_id is null and a.credits > 0 and a.created_at < now() - interval '20 hours' and a.created_at > now() - interval '3 days'
+    union all
+    select a.user_id, a.email, a.credits, 'stage-4' from accounts a left join st using (user_id)
+      where st.user_id is null and a.credits > 0 and a.created_at < now() - interval '4 days' and a.created_at > now() - interval '8 days'
+    union all
+    select a.user_id, a.email, a.credits, 'buy-2' from accounts a join st using (user_id)
+      where a.credits = 0 and a.auto_pack is null and a.user_id not in (select user_id from paid)
+        and st.last_stage < now() - interval '1 day' and st.last_stage > now() - interval '10 days'
+    union all
+    select a.user_id, a.email, a.credits, 'return-30' from accounts a join st using (user_id)
+      where a.user_id in (select user_id from paid) and st.last_stage < now() - interval '30 days' and st.last_stage > now() - interval '45 days'
+  )
+  select coalesce(json_agg(row_to_json(x)), '[]'::json) from (
+    select c.* from c join accounts a using (user_id)
+    where not a.emails_off and not exists (select 1 from nudges_sent n where n.user_id = c.user_id and n.kind = c.kind)
+    limit p_limit
+  ) x;
+$$;
+
+-- Record that a follow-up was sent. False if it had been already (send nothing).
+create or replace function public.mark_nudge(p_user uuid, p_kind text)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  insert into nudges_sent (user_id, kind) values (p_user, p_kind) on conflict do nothing;
+  return found;
+end $$;
+
+create or replace function public.set_emails_off(p_user uuid)
+returns void language sql security definer set search_path = public as $$
+  update accounts set emails_off = true where user_id = p_user;
+$$;
+
+do $$
+declare f text;
+begin
+  foreach f in array array['nudge_candidates(integer)', 'mark_nudge(uuid, text)', 'set_emails_off(uuid)'] loop
+    execute format('revoke all on function public.%s from public, anon, authenticated', f);
+    execute format('grant execute on function public.%s to service_role', f);
+  end loop;
+end $$;
+
 -- Tell the Supabase API to pick up new tables and functions straight away.
 notify pgrst, 'reload schema';

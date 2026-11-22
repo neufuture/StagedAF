@@ -24,6 +24,9 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
     promos: new Map(), // code -> {credits, max, expires, users:Set}
     rates: new Map(),
     events: [],
+    nudgeCandidates: [],
+    nudgesSent: new Set(),
+    optedOut: new Set(),
     emails_sent: [], // alert emails sent through the Resend stand-in
     turnstileGood: 'XXXX.DUMMY.TOKEN.XXXX',
     usage: { input_tokens: 1300, input_tokens_details: { text_tokens: 300, image_tokens: 1000 }, output_tokens: 5400 },
@@ -84,6 +87,19 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
       return true;
     },
     trim_rate_events() {
+      return null;
+    },
+    nudge_candidates({ p_limit }) {
+      return state.nudgeCandidates.filter((c) => !state.optedOut.has(c.user_id) && !state.nudgesSent.has(c.user_id + ':' + c.kind)).slice(0, p_limit);
+    },
+    mark_nudge({ p_user, p_kind }) {
+      const k = p_user + ':' + p_kind;
+      if (state.nudgesSent.has(k)) return false;
+      state.nudgesSent.add(k);
+      return true;
+    },
+    set_emails_off({ p_user }) {
+      state.optedOut.add(p_user);
       return null;
     },
     note_event({ p_kind, p_key }) {

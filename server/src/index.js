@@ -6,6 +6,7 @@
 //   GET  /api/me                                     -> email, credits, packs
 //   GET  /api/packs                                  -> packs (public, for the website)
 //   GET  /api/config                                 -> public settings (Turnstile site key)
+//   GET/POST /api/unsubscribe?u=&t=                  stop follow-up emails (signed link)
 //   POST /api/stage          multipart photo         -> staged photo (costs 1 credit)
 //   POST /api/checkout       {pack, auto?, from?}    -> Stripe Checkout URL
 //   POST /api/auto-topup     {enabled:false}         turn auto top-up off
@@ -20,6 +21,7 @@
 import { CORS, HttpError, json, readJson } from './http.js';
 import { cleanup, createJob, deleteJob, jobResult, listJobs, runJob } from './jobs.js';
 import { dailySummary } from './alerts.js';
+import { sendNudges, unsubscribe } from './nudges.js';
 import { allow, clientIp, enforce } from './limits.js';
 import { checkTurnstile, turnstileOn } from './turnstile.js';
 import { stage } from './stage.js';
@@ -127,6 +129,7 @@ async function api(request, env, path, ctx) {
     case 'GET /api/jobs':
       return listJobs(env, await requireUser(env, request));
   }
+  if (path === '/api/unsubscribe' && (request.method === 'GET' || request.method === 'POST')) return unsubscribe(request, env);
   const job = /^\/api\/jobs\/([^/]+)(\/result)?$/.exec(path);
   if (job && request.method === 'GET' && job[2]) return jobResult(env, await requireUser(env, request), job[1]);
   if (job && request.method === 'DELETE' && !job[2]) return deleteJob(env, await requireUser(env, request), job[1]);
@@ -154,7 +157,14 @@ export default {
 
   // Hourly: fail stuck jobs (with refunds) and delete stagings older than 30 days.
   async scheduled(event, env, ctx) {
-    if (event.cron === DAILY_CRON) ctx.waitUntil(dailySummary(env));
+    if (event.cron === DAILY_CRON) {
+      ctx.waitUntil(
+        (async () => {
+          const nudged = await sendNudges(env).catch((e) => (console.error('follow-up emails failed', e && e.message), 0));
+          await dailySummary(env, { nudged });
+        })()
+      );
+    }
     else ctx.waitUntil(cleanup(env));
   },
 };
