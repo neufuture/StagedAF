@@ -161,6 +161,37 @@ try {
   assert(await page.locator('#studio').isHidden(), 'sign out returns to the sign-in form');
   await page.goto(site + '/account.html');
   assert(await page.locator('#siEmail').isVisible() && (await page.locator('#account').isHidden()), 'account page asks signed-out visitors to sign in');
+  console.log('Promo codes');
+  mock.state.promos.set('WELCOME10', { credits: 10, users: new Set() });
+  mock.state.promos.set('EXTRA5', { credits: 5, users: new Set() });
+  await page.goto(site + '/app.html?code=welcome10');
+  await page.locator('.promo-note', { hasText: 'WELCOME10' }).waitFor();
+  assert(!page.url().includes('code='), 'a ?code= link holds the code (and tidies the address) until sign-in');
+  await page.locator('#siEmail').fill('tester@example.com');
+  await page.locator('#emailForm button').click();
+  await page.locator('#siCode').fill('123456');
+  await page.locator('#codeForm button').click();
+  await page.locator('#promoMsg.ok', { hasText: '10 credits added' }).waitFor();
+  await page.locator('#credits', { hasText: '12 credits' }).waitFor();
+  assert(true, 'signing up through the link applies it: 2 free + 10 promo credits');
+  if (shots) await page.screenshot({ path: shots + '/promo-link.png' });
+  await page.goto(site + '/account.html');
+  await page.locator('#promoCode').fill('nope');
+  await page.locator('#promoForm button').click();
+  await page.locator('#promoResult.bad', { hasText: "isn't valid" }).waitFor();
+  await page.locator('#promoCode').fill('extra5');
+  await page.locator('#promoForm button').click();
+  await page.locator('#promoResult.ok', { hasText: '5 credits added' }).waitFor();
+  await page.locator('#balance', { hasText: '17' }).waitFor();
+  await page.locator('#tx tbody tr').nth(1).waitFor();
+  const promoRows = await page.locator('#tx tbody tr').allInnerTexts();
+  assert(/promo code EXTRA5\)\s+Free/.test(promoRows[0]) && /promo code WELCOME10/.test(promoRows[1]) && (await page.locator('#tx button').count()) === 0, 'Account page: bad code refused, good code adds credits; both listed as Free with no receipt');
+  if (shots) await page.screenshot({ path: shots + '/promo-account.png', fullPage: true });
+  await page.locator('#promoCode').fill('EXTRA5');
+  await page.locator('#promoForm button').click();
+  await page.locator('#promoResult.bad', { hasText: 'already used' }).waitFor();
+  assert(true, 'the same code cannot be used twice');
+
   const phone = await browser.newContext({ viewport: { width: 390, height: 800 } });
   for (const p of ['/', '/app.html', '/account.html']) {
     const pg = await phone.newPage();

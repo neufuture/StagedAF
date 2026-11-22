@@ -155,8 +155,8 @@ under `vars`. Free sign-up credits are `FREE_CREDITS`. The packs default to
 "PACKS": "[{\"id\":\"pack25\",\"name\":\"25 staged photos\",\"credits\":25,\"amount\":1900},{\"id\":\"pack50\",\"name\":\"50 staged photos\",\"credits\":50,\"amount\":3400},{\"id\":\"pack100\",\"name\":\"100 staged photos\",\"credits\":100,\"amount\":5900}]"
 ```
 
-**After a server update that changes the database.** (Most recently: the
-website account pages.) Run
+**After a server update that changes the database.** (Most recently: promo
+codes.) Run
 `server/supabase/schema.sql` again in the Supabase SQL Editor. It is written
 to be run repeatedly and never removes data.
 
@@ -183,6 +183,25 @@ card switches it off. To see who has it on:
 ```sql
 select email, credits, auto_pack from accounts where auto_pack is not null;
 ```
+
+**Promo codes (free credits for testers).** Create codes in Supabase:
+**Table Editor → promo_codes → Insert row**.
+
+| Column | What to enter |
+|---|---|
+| `code` | The code, e.g. `BETA25`. Letters, numbers and dashes; it is stored in capitals, so customers can type it either way. |
+| `credits` | How many credits it gives. |
+| `max_uses` | How many accounts can use it in total. Leave empty for unlimited. |
+| `expires_at` | When it stops working. Leave empty for never. |
+| `active` | Untick to switch a code off. |
+| `note` | Who it's for, for your own reference. |
+
+Each account can use a given code once. Customers enter codes on the website's
+Account page or in the extension's settings, or you can send a link that signs
+them up and applies the code in one go:
+`https://unitstager.com/app.html?code=BETA25`
+
+Who has used a code: `select * from promo_redemptions where code = 'BETA25';`
 
 **Giving someone free credits** (Supabase → SQL Editor):
 

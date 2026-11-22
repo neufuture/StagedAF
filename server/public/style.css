@@ -195,3 +195,9 @@ nav a.nav-cta { color: var(--accent); font-weight: 700; }
 .recent-list .acts { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 .recent-list .st-err { color: #b91c1c; font-size: 13.5px; }
 @media (max-width: 640px) { .recent-list th:nth-child(2), .recent-list td:nth-child(2), .recent-list th:nth-child(4), .recent-list td:nth-child(4) { display: none; } }
+.promo-note { background: var(--soft); color: var(--accent); font-weight: 600; font-size: 14.5px; padding: 8px 12px; border-radius: 8px; }
+.msg.banner { margin: 0 0 14px; padding: 10px 14px; border-radius: 10px; background: var(--soft); }
+.msg.banner.ok { background: var(--good-bg); }
+.msg.banner.bad { background: #fee2e2; }
+#promoForm { width: 100%; margin-top: 4px; }
+#promoForm input:not(:placeholder-shown) { text-transform: uppercase; }

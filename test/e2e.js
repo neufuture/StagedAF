@@ -156,6 +156,16 @@ const assert = (cond, msg) => {
       await opts.locator('#signedIn').waitFor();
       await opts.locator('#packs button').first().waitFor();
       assert((await opts.locator('#credits').textContent()) === '2' && (await opts.locator('#who').textContent()) === 'pm@example.com', 'signed in with 2 free credits');
+      mock.state.promos.set('TESTER3', { credits: 3, users: new Set() });
+      await opts.locator('#promoCode').fill('tester3');
+      await opts.locator('#promoApply').click();
+      await opts.locator('#authResult.ok', { hasText: '3 credits added' }).waitFor();
+      await opts.locator('#credits', { hasText: '5' }).waitFor();
+      await opts.locator('#history tr', { hasText: 'promo code TESTER3' }).waitFor();
+      assert(true, 'a promo code can be applied in the extension settings');
+      mock.state.accounts.set([...mock.state.users.values()].find((u) => u.email === 'pm@example.com').id, 2);
+      await opts.locator('#refresh').click();
+      await opts.locator('#credits', { hasText: '2' }).waitFor();
       await page.bringToFront();
       await page.locator('unit-stager .dock', { hasText: '2 credits left' }).waitFor();
       const stageOne = async (n) => {
@@ -213,9 +223,9 @@ const assert = (cond, msg) => {
 
       await opts.bringToFront();
       await opts.locator('#refresh').click();
-      await opts.locator('#history tr').nth(1).waitFor();
+      await opts.locator('#history tr').nth(2).waitFor();
       const rows = await opts.locator('#history tr').allInnerTexts();
-      assert(rows.length === 2 && /50 credits \(auto top-up\)\s+\$34\.00/.test(rows[0]) && /50 credits\s/.test(rows[1]), 'purchase history lists the purchase and the auto top-up');
+      assert(rows.length === 3 && /promo code TESTER3\)\s+Free/.test(rows[2]) && /50 credits \(auto top-up\)\s+\$34\.00/.test(rows[0]) && /50 credits\s/.test(rows[1]), 'purchase history lists the purchase and the auto top-up');
       await ctx.route('https://pay.stripe.test/**', (route) => route.fulfill({ contentType: 'text/html', body: 'mock receipt' }));
       const [receiptTab] = await Promise.all([ctx.waitForEvent('page'), opts.locator('#history button').first().click()]);
       await receiptTab.waitForURL(/pay\.stripe\.test\/receipts\/pi_test_1/);

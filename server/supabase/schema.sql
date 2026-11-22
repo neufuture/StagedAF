@@ -275,5 +275,83 @@ begin
   end loop;
 end $$;
 
+-- ---------------------------------------------------------------------------
+-- Promo codes: free credits, e.g. for testers. Create them in Supabase's Table
+-- Editor (table promo_codes) or with SQL, for example:
+--   insert into promo_codes (code, credits, max_uses, expires_at, note)
+--   values ('BETA25', 25, 50, now() + interval '60 days', 'Portland beta testers');
+-- Each account can use a given code once.
+
+create table if not exists public.promo_codes (
+  code       text primary key check (code ~ '^[A-Z0-9-]{3,40}$'),
+  credits    integer not null check (credits > 0 and credits <= 10000),
+  max_uses   integer check (max_uses is null or max_uses > 0),   -- empty = unlimited
+  uses       integer not null default 0,
+  expires_at timestamptz,                                         -- empty = never
+  active     boolean not null default true,
+  note       text,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.promo_redemptions (
+  code       text not null references public.promo_codes (code) on delete cascade,
+  user_id    uuid not null references public.accounts (user_id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (code, user_id)
+);
+create table if not exists public.promo_attempts (
+  user_id uuid not null,
+  at      timestamptz not null default now()
+);
+create index if not exists promo_attempts_idx on public.promo_attempts (user_id, at);
+alter table public.promo_codes enable row level security;
+alter table public.promo_redemptions enable row level security;
+alter table public.promo_attempts enable row level security;
+
+-- Codes are stored in capitals without spaces, however they were typed in.
+create or replace function public.promo_code_tidy() returns trigger language plpgsql as $$
+begin
+  new.code := upper(regexp_replace(new.code, '\s', '', 'g'));
+  return new;
+end $$;
+drop trigger if exists promo_code_tidy on public.promo_codes;
+create trigger promo_code_tidy before insert or update of code on public.promo_codes for each row execute function public.promo_code_tidy();
+
+-- Redeem a code. Returns {"ok":true,"added":n,"credits":balance} or
+-- {"ok":false,"error":"invalid|expired|used_up|already|too_many"}.
+create or replace function public.redeem_promo(p_user uuid, p_code text)
+returns json language plpgsql security definer set search_path = public as $$
+declare c promo_codes; v integer; clean text := upper(regexp_replace(coalesce(p_code, ''), '\s', '', 'g'));
+begin
+  if (select count(*) from promo_attempts where user_id = p_user and at > now() - interval '1 hour') >= 10 then
+    return json_build_object('ok', false, 'error', 'too_many');
+  end if;
+  select * into c from promo_codes where code = clean for update;
+  if not found or not c.active then
+    insert into promo_attempts (user_id) values (p_user);
+    return json_build_object('ok', false, 'error', 'invalid');
+  end if;
+  if c.expires_at is not null and c.expires_at < now() then return json_build_object('ok', false, 'error', 'expired'); end if;
+  if exists (select 1 from promo_redemptions where code = clean and user_id = p_user) then return json_build_object('ok', false, 'error', 'already'); end if;
+  if c.max_uses is not null and c.uses >= c.max_uses then return json_build_object('ok', false, 'error', 'used_up'); end if;
+  insert into promo_redemptions (code, user_id) values (clean, p_user);
+  update promo_codes set uses = uses + 1 where code = clean;
+  insert into credit_ledger (user_id, delta, reason, ref) values (p_user, c.credits, 'promo', 'promo:' || clean || ':' || p_user);
+  update accounts set credits = credits + c.credits where user_id = p_user returning credits into v;
+  return json_build_object('ok', true, 'added', c.credits, 'credits', v, 'code', clean);
+end $$;
+
+-- Purchase history now also lists promo codes used.
+create or replace function public.list_purchases(p_user uuid)
+returns json language sql security definer set search_path = public as $$
+  select coalesce(json_agg(row_to_json(x)), '[]'::json) from (
+    select created_at, delta as credits, reason, ref, amount_cents
+    from credit_ledger where user_id = p_user and reason in ('purchase', 'auto-topup', 'promo')
+    order by created_at desc limit 50
+  ) x;
+$$;
+
+revoke all on function public.redeem_promo(uuid, text) from public, anon, authenticated;
+grant execute on function public.redeem_promo(uuid, text) to service_role;
+
 -- Tell the Supabase API to pick up new tables and functions straight away.
 notify pgrst, 'reload schema';

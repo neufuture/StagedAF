@@ -165,7 +165,11 @@ export async function maybeAutoTopUp(env, user, credits) {
 export async function purchases(env, user) {
   const rows = (await listPurchases(env, user.id)) || [];
   return json({
-    purchases: rows.map((r) => ({ id: String(r.ref || '').replace(/^stripe:/, ''), date: r.created_at, credits: r.credits, amount: r.amount_cents ?? null, auto: r.reason === 'auto-topup' })),
+    purchases: rows.map((r) =>
+      r.reason === 'promo'
+        ? { id: null, date: r.created_at, credits: r.credits, amount: 0, promo: String(r.ref || '').split(':')[1] || 'promo' }
+        : { id: String(r.ref || '').replace(/^stripe:/, ''), date: r.created_at, credits: r.credits, amount: r.amount_cents ?? null, auto: r.reason === 'auto-topup' }
+    ),
   });
 }
 

@@ -21,6 +21,7 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
     rejectFidelity: true, // behave like a model that rejects input_fidelity
     imageDelay: 300,
     stagings: new Map(),
+    promos: new Map(), // code -> {credits, max, expires, users:Set}
   };
   const userFor = (email) => {
     if (!state.users.has(email)) state.users.set(email, { id: crypto.randomUUID(), email });
@@ -126,8 +127,20 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
       if (row) row.amount_cents = p_cents;
       return null;
     },
+    redeem_promo({ p_user, p_code }) {
+      const code = String(p_code || '').replace(/\s/g, '').toUpperCase();
+      const c = state.promos.get(code);
+      if (!c) return { ok: false, error: 'invalid' };
+      if (c.expires && c.expires < Date.now()) return { ok: false, error: 'expired' };
+      if (c.users.has(p_user)) return { ok: false, error: 'already' };
+      if (c.max && c.users.size >= c.max) return { ok: false, error: 'used_up' };
+      c.users.add(p_user);
+      state.accounts.set(p_user, (state.accounts.get(p_user) || 0) + c.credits);
+      state.ledger.push({ user: p_user, delta: c.credits, reason: 'promo', ref: `promo:${code}:${p_user}`, at: new Date().toISOString() });
+      return { ok: true, added: c.credits, credits: state.accounts.get(p_user), code };
+    },
     list_purchases({ p_user }) {
-      return state.ledger.filter((l) => l.user === p_user && ['purchase', 'auto-topup'].includes(l.reason)).map((l) => ({ created_at: l.at, credits: l.delta, reason: l.reason, ref: l.ref, amount_cents: l.amount_cents ?? null })).reverse();
+      return state.ledger.filter((l) => l.user === p_user && ['purchase', 'auto-topup', 'promo'].includes(l.reason)).map((l) => ({ created_at: l.at, credits: l.delta, reason: l.reason, ref: l.ref, amount_cents: l.amount_cents ?? null })).reverse();
     },
     add_credits({ p_user, p_amount, p_reason, p_ref }) {
       if (!state.refs.has(p_ref)) {

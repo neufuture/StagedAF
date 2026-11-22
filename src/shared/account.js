@@ -77,6 +77,12 @@
       const { token } = await auth();
       return (await request(await settings(), '/api/checkout', { method: 'POST', token, body: { pack, auto: auto === true } })).url;
     },
+    async promo({ code }) {
+      const { token } = await auth();
+      const d = await request(await settings(), '/api/promo', { method: 'POST', token, body: { code } });
+      await chrome.storage.local.set({ credits: d.credits });
+      return d;
+    },
     async purchases() {
       const { token } = await auth();
       return (await request(await settings(), '/api/purchases', { token })).purchases;

@@ -29,8 +29,36 @@
       setTimeout(load, 3000);
       setTimeout(load, 8000);
     }
+    US.redeemPending().then((r) => {
+      if (!r) return;
+      sayPromo(r.message, r.ok ? 'ok' : 'bad');
+      if (r.ok) load();
+    });
     load();
   }
+
+  const sayPromo = (t, cls = '') => {
+    $('promoResult').className = 'msg ' + cls;
+    $('promoResult').textContent = t;
+  };
+  $('promoForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const code = $('promoCode').value.trim();
+    if (!code) return;
+    const btn = $('promoForm').querySelector('button');
+    btn.disabled = true;
+    sayPromo('Checking…');
+    try {
+      const r = await US.redeem(code);
+      sayPromo(`${r.added} credits added.`, 'ok');
+      $('promoCode').value = '';
+      load();
+    } catch (err) {
+      sayPromo(err.message, 'bad');
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   async function load() {
     try {
@@ -108,9 +136,10 @@
           }
         });
         const last = document.createElement('td');
-        last.append(btn);
+        if (p.id) last.append(btn);
         const date = new Date(p.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-        tr.append(td(date), td(`${p.credits} credits${p.auto ? ' (auto top-up)' : ''}`), td(p.amount != null ? money(p.amount) : ''), last);
+        const what = p.promo ? `${p.credits} credits (promo code ${p.promo})` : `${p.credits} credits${p.auto ? ' (auto top-up)' : ''}`;
+        tr.append(td(date), td(what), td(p.promo ? 'Free' : p.amount != null ? money(p.amount) : ''), last);
         return tr;
       })
     );

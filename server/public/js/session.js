@@ -54,7 +54,46 @@
     return refreshing;
   }
 
+  // A promo code in the address (…?code=BETA25) is held until the visitor is
+  // signed in, then applied once.
+  const PROMO = 'unitstager.promo';
+  try {
+    const url = new URL(location.href);
+    const fromUrl = url.searchParams.get('code');
+    if (fromUrl) {
+      sessionStorage.setItem(PROMO, fromUrl.trim().slice(0, 60));
+      url.searchParams.delete('code');
+      history.replaceState(null, '', url.pathname + url.search + url.hash);
+    }
+  } catch {}
+  const pendingPromo = () => {
+    try {
+      return sessionStorage.getItem(PROMO) || '';
+    } catch {
+      return '';
+    }
+  };
+
   window.US = {
+    pendingPromo,
+    // Apply a held promo code, if any. Returns null, or {ok, message, credits}.
+    async redeemPending() {
+      const code = pendingPromo();
+      if (!code || !read()) return null;
+      try {
+        sessionStorage.removeItem(PROMO);
+      } catch {}
+      try {
+        const { data } = await this.api('/api/promo', { method: 'POST', body: { code } });
+        return { ok: true, credits: data.credits, message: `Promo code ${data.code} applied: ${data.added} credits added.` };
+      } catch (e) {
+        return { ok: false, message: e.message };
+      }
+    },
+    async redeem(code) {
+      const { data } = await this.api('/api/promo', { method: 'POST', body: { code } });
+      return data;
+    },
     session: read,
     signedIn: () => !!read(),
     async start(email) {

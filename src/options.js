@@ -126,9 +126,10 @@
           }
         });
         const last = document.createElement('td');
-        last.append(btn);
+        if (p.id) last.append(btn);
         const date = new Date(p.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-        row.append(cell(date), cell(`${p.credits} credits${p.auto ? ' (auto top-up)' : ''}`), cell(p.amount != null ? '$' + (p.amount / 100).toFixed(2) : ''), last);
+        const what = p.promo ? `${p.credits} credits (promo code ${p.promo})` : `${p.credits} credits${p.auto ? ' (auto top-up)' : ''}`;
+        row.append(cell(date), cell(what), cell(p.promo ? 'Free' : p.amount != null ? '$' + (p.amount / 100).toFixed(2) : ''), last);
         return row;
       })
     );
@@ -148,6 +149,21 @@
       if (!quiet || e.code === 'auth') say(e.message, 'bad');
     }
   }
+
+  $('promoApply').addEventListener('click', async () => {
+    const code = $('promoCode').value.trim();
+    if (!code) return;
+    say('Checking…');
+    try {
+      const r = await account('promo', { code });
+      $('promoCode').value = '';
+      say(`Promo code ${r.code} applied: ${r.added} credits added.`, 'ok');
+      refreshAccount(true);
+    } catch (e) {
+      say(e.message, 'bad');
+    }
+  });
+  $('promoCode').addEventListener('keydown', (e) => e.key === 'Enter' && $('promoApply').click());
 
   $('autoOff').addEventListener('click', async () => {
     try {

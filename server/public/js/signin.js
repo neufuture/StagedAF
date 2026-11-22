@@ -19,6 +19,13 @@
         <p id="siMsg" class="msg" role="status"></p>
       </div>`;
     const $ = (id) => box.querySelector('#' + id);
+    const promo = US.pendingPromo();
+    if (promo) {
+      const note = document.createElement('p');
+      note.className = 'promo-note';
+      note.textContent = `Promo code ${promo.toUpperCase()} will be applied once you're signed in.`;
+      box.querySelector('.signin p').after(note);
+    }
     const say = (t, cls = '') => {
       $('siMsg').className = 'msg ' + cls;
       $('siMsg').textContent = t;

@@ -463,3 +463,24 @@ test('jobs: if the database is unreachable, the uploaded photo is not left behin
   assert.equal([...state.stagings.values()].some((j) => j.user_id === s.user.id), false);
   assert.equal(state.accounts.get(s.user.id), 2, 'no credit taken');
 });
+
+test('promo codes: redeem once for credits; bad, used-up and repeat codes are refused', async () => {
+  state.promos.set('BETA25', { credits: 25, max: 2, users: new Set() });
+  state.promos.set('OLD', { credits: 5, expires: Date.now() - 1000, users: new Set() });
+  const a = await signIn('promo-a@example.com'); // 2 free credits
+  const r = await call('/api/promo', { method: 'POST', token: a.access_token, body: { code: ' beta25 ' } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.data, { added: 25, credits: 27, code: 'BETA25' });
+  const again = await call('/api/promo', { method: 'POST', token: a.access_token, body: { code: 'BETA25' } });
+  assert.equal(again.status, 400);
+  assert.match(again.data.error, /already used/);
+  assert.match((await call('/api/promo', { method: 'POST', token: a.access_token, body: { code: 'NOPE' } })).data.error, /isn't valid/);
+  assert.match((await call('/api/promo', { method: 'POST', token: a.access_token, body: { code: 'OLD' } })).data.error, /expired/);
+  assert.equal((await call('/api/promo', { method: 'POST', token: a.access_token, body: { code: '' } })).status, 400);
+  assert.equal((await call('/api/promo', { method: 'POST', body: { code: 'BETA25' } })).status, 401);
+  const list = (await call('/api/purchases', { token: a.access_token })).data.purchases;
+  assert.deepEqual(list.map((p) => [p.promo, p.credits, p.amount, p.id]), [['BETA25', 25, 0, null]], 'shows in the transaction list, with no receipt');
+  await call('/api/promo', { method: 'POST', token: (await signIn('promo-b@example.com')).access_token, body: { code: 'BETA25' } });
+  const c = await signIn('promo-c@example.com');
+  assert.match((await call('/api/promo', { method: 'POST', token: c.access_token, body: { code: 'BETA25' } })).data.error, /fully used/);
+});

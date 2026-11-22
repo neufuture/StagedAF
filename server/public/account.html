@@ -39,6 +39,15 @@
           <p id="autoOn" hidden>Auto top-up is <b>on</b>: <span id="autoWhat"></span> when you're down to <span class="thr">3</span> credits. <button class="btn small" id="autoOff" type="button">Turn off</button></p>
         </div>
         <div class="card">
+          <h2>Promo code</h2>
+          <form id="promoForm" class="row-form">
+            <label class="sr" for="promoCode">Promo code</label>
+            <input id="promoCode" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. BETA25" maxlength="60">
+            <button class="btn" type="submit">Apply</button>
+          </form>
+          <p id="promoResult" class="msg" role="status"></p>
+        </div>
+        <div class="card">
           <h2>Payment methods</h2>
           <p class="muted">Add, remove or change the cards saved on your account, and see past payments. This opens Stripe's secure page.</p>
           <button class="btn" id="portal" type="button">Manage payment methods</button>

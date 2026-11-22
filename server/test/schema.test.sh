@@ -81,7 +81,23 @@ check "a finished job can be deleted"                "$(q -c "select delete_stag
 q -c "update stagings set created_at = now() - interval '31 days' where id='$J2'"
 check "purge removes stagings older than 30 days"    "$(q -c "select json_array_length(purge_stagings(30))")/$(q -c "select count(*) from stagings where user_id='$W'")" "1/1"
 check "browser roles cannot reach stagings"          "$(q -c "select has_function_privilege('anon','create_staging(uuid,uuid,text,text,text,text,integer,integer,boolean)','execute') or has_function_privilege('authenticated','list_stagings(uuid,integer)','execute') or has_function_privilege('anon','finish_staging(uuid,boolean,text)','execute')")" f
-check "browser roles cannot call spend_credit"       "$(q -c "select has_function_privilege('authenticated','spend_credit(uuid,text)','execute') or has_function_privilege('anon','add_credits(uuid,integer,text,text)','execute') or has_function_privilege('anon','claim_auto_topup(uuid,integer,integer)','execute') or has_function_privilege('authenticated','set_auto_topup(uuid,text,text)','execute') or has_function_privilege('anon','get_account(uuid)','execute') or has_function_privilege('authenticated','list_purchases(uuid)','execute') or has_function_privilege('anon','note_payment(text,integer)','execute') or has_function_privilege('authenticated','set_stripe_customer(uuid,text)','execute')")" f
+# Promo codes.
+P=44444444-4444-4444-4444-444444444444; Q=55555555-5555-5555-5555-555555555555
+q -c "insert into auth.users values ('$P'),('$Q')"; q -c "select ensure_account('$P','p@b.co',0), ensure_account('$Q','q@b.co',0)" >/dev/null
+q -c "insert into promo_codes (code, credits, max_uses) values (' beta 25 ', 25, 1)"
+check "codes are stored in capitals, spaces removed" "$(q -c "select code from promo_codes")" BETA25
+check "redeeming adds the credits"                   "$(q -c "select redeem_promo('$P','beta25')->>'credits'")" 25
+check "the same account can't use it twice"          "$(q -c "select redeem_promo('$P','BETA25')->>'error'")" already
+check "a code past its use limit is refused"         "$(q -c "select redeem_promo('$Q','BETA25')->>'error'")" used_up
+q -c "insert into promo_codes (code, credits, expires_at) values ('OLD', 5, now() - interval '1 day')"
+check "an expired code is refused"                   "$(q -c "select redeem_promo('$Q','OLD')->>'error'")" expired
+check "an unknown code is refused"                   "$(q -c "select redeem_promo('$Q','NOPE')->>'error'")" invalid
+for i in $(seq 1 10); do q -c "select redeem_promo('$Q','WRONG$i')" >/dev/null; done
+q -c "insert into promo_codes (code, credits) values ('REAL', 5)"
+check "10 wrong guesses in an hour locks guessing"   "$(q -c "select redeem_promo('$Q','REAL')->>'error'")" too_many
+check "promo shows in purchase history"              "$(q -c "select x->>'reason' || '/' || (x->>'credits') from json_array_elements(list_purchases('$P')) x")" promo/25
+check "ledger matches the balance"                   "$(q -c "select sum(delta) from credit_ledger where user_id='$P'")" 25
+check "browser roles cannot call spend_credit"       "$(q -c "select has_function_privilege('authenticated','spend_credit(uuid,text)','execute') or has_function_privilege('anon','add_credits(uuid,integer,text,text)','execute') or has_function_privilege('anon','claim_auto_topup(uuid,integer,integer)','execute') or has_function_privilege('authenticated','set_auto_topup(uuid,text,text)','execute') or has_function_privilege('anon','get_account(uuid)','execute') or has_function_privilege('authenticated','list_purchases(uuid)','execute') or has_function_privilege('anon','note_payment(text,integer)','execute') or has_function_privilege('authenticated','set_stripe_customer(uuid,text)','execute') or has_function_privilege('authenticated','redeem_promo(uuid,text)','execute')")" f
 check "server role can"                              "$(q -c "select has_function_privilege('service_role','add_credits(uuid,integer,text,text)','execute')")" t
-check "row level security is on"                     "$(q -c "select bool_and(relrowsecurity) from pg_class where relname in ('accounts','credit_ledger','stagings')")" t
+check "row level security is on"                     "$(q -c "select bool_and(relrowsecurity) from pg_class where relname in ('accounts','credit_ledger','stagings','promo_codes','promo_redemptions','promo_attempts')")" t
 [ $fail = 0 ] && echo "SCHEMA OK" || { echo "SCHEMA FAILED"; exit 1; }

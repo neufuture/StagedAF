@@ -9,7 +9,8 @@
 //   POST /api/checkout       {pack, auto?, from?}    -> Stripe Checkout URL
 //   POST /api/auto-topup     {enabled:false}         turn auto top-up off
 //   POST /api/billing-portal                         -> Stripe portal URL (saved cards, payments)
-//   GET  /api/purchases                              -> the account's purchases
+//   POST /api/promo          {code}                  redeem a promo code -> {added, credits}
+//   GET  /api/purchases                              -> the account's purchases (and promo codes used)
 //   POST /api/receipt        {id}                    -> Stripe receipt URL for one purchase
 //   POST /api/stripe/webhook                         Stripe -> add purchased credits
 //   POST/GET /api/jobs, GET /api/jobs/<id>/result, DELETE /api/jobs/<id>   background staging (jobs.js)
@@ -19,7 +20,7 @@ import { CORS, HttpError, json, readJson } from './http.js';
 import { cleanup, createJob, deleteJob, jobResult, listJobs, runJob } from './jobs.js';
 import { stage } from './stage.js';
 import { AUTO_THRESHOLD, billingPortal, createCheckout, publicPacks, purchases, receipt, webhook } from './stripe.js';
-import { ensureAccount, getAccount, refreshSession, requireUser, sendCode, setAutoTopup, verifyCode } from './supabase.js';
+import { ensureAccount, getAccount, refreshSession, requireUser, rpc, sendCode, setAutoTopup, verifyCode } from './supabase.js';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -64,6 +65,22 @@ async function api(request, env, path, ctx) {
     }
     case 'POST /api/billing-portal':
       return billingPortal(request, env, await requireUser(env, request));
+    case 'POST /api/promo': {
+      const user = await requireUser(env, request);
+      const code = String((await readJson(request)).code || '').trim();
+      if (!code || code.length > 60) throw new HttpError(400, 'Enter a promo code.');
+      await ensureAccount(env, user);
+      const r = (await rpc(env, 'redeem_promo', { p_user: user.id, p_code: code })) || {};
+      if (r.ok) return json({ added: r.added, credits: r.credits, code: r.code });
+      const why = {
+        invalid: "That promo code isn't valid.",
+        expired: 'That promo code has expired.',
+        used_up: 'That promo code has been fully used.',
+        already: "You've already used that promo code.",
+        too_many: 'Too many attempts. Try again in an hour.',
+      };
+      throw new HttpError(r.error === 'too_many' ? 429 : 400, why[r.error] || "That promo code couldn't be used.", 'promo-' + (r.error || 'invalid'));
+    }
     case 'GET /api/purchases':
       return purchases(env, await requireUser(env, request));
     case 'POST /api/receipt': {

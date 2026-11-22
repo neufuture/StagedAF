@@ -48,6 +48,13 @@
     if (out) out.hidden = false;
     loadBalance();
     poll();
+    US.redeemPending().then((r) => {
+      if (!r) return;
+      $('promoMsg').hidden = false;
+      $('promoMsg').className = 'msg banner ' + (r.ok ? 'ok' : 'bad');
+      $('promoMsg').textContent = r.message;
+      if (r.ok) setCredits(r.credits);
+    });
   }
 
   async function loadBalance() {
