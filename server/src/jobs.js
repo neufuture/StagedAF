@@ -32,9 +32,15 @@ export async function createJob(request, env, user, ctx) {
   const id = crypto.randomUUID();
   // Store the photo first: if the credit can't be taken, it's simply deleted.
   await env.PHOTOS.put(keyIn(user.id, id), await up.image.arrayBuffer(), { httpMetadata: { contentType: up.image.type } });
-  const credits = await rpc(env, 'create_staging', {
-    p_user: user.id, p_id: id, p_name: up.name, p_room: up.room, p_style: up.style, p_custom: up.custom, p_width: up.width, p_height: up.height, p_label: up.label,
-  });
+  let credits;
+  try {
+    credits = await rpc(env, 'create_staging', {
+      p_user: user.id, p_id: id, p_name: up.name, p_room: up.room, p_style: up.style, p_custom: up.custom, p_width: up.width, p_height: up.height, p_label: up.label,
+    });
+  } catch (e) {
+    await env.PHOTOS.delete(keyIn(user.id, id)).catch(() => {});
+    throw e;
+  }
   if (!(credits >= 0)) {
     await env.PHOTOS.delete(keyIn(user.id, id)).catch(() => {});
     throw new HttpError(402, "You're out of credits.", 'no-credits');

@@ -274,3 +274,6 @@ begin
     execute format('grant execute on function public.%s to service_role', f);
   end loop;
 end $$;
+
+-- Tell the Supabase API to pick up new tables and functions straight away.
+notify pgrst, 'reload schema';

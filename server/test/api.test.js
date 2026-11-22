@@ -451,3 +451,15 @@ test('jobs: delete, and the hourly cleanup of stuck and 30-day-old stagings', as
   assert.equal(state.stagings.get(stuck).status, 'error', 'stuck job failed');
   assert.equal(state.accounts.get(s.user.id), credits + 1, '…with its credit refunded');
 });
+
+test('jobs: if the database is unreachable, the uploaded photo is not left behind', async () => {
+  const s = await signIn('jobsdb@example.com');
+  const before = app.photos.files.size;
+  state.rpcFail = 'create_staging';
+  const r = await jobCall(s.access_token);
+  state.rpcFail = null;
+  assert.equal(r.status, 502);
+  assert.equal(app.photos.files.size, before, 'nothing left in storage');
+  assert.equal([...state.stagings.values()].some((j) => j.user_id === s.user.id), false);
+  assert.equal(state.accounts.get(s.user.id), 2, 'no credit taken');
+});

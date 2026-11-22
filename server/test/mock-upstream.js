@@ -168,6 +168,7 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
       }
       if (p.startsWith('/rest/v1/rpc/')) {
         if (req.headers.apikey !== 'secret-key' || req.headers.authorization !== 'Bearer secret-key') return send(401, { message: 'bad key' });
+        if (state.rpcFail && p.endsWith('/' + state.rpcFail)) return send(404, { code: 'PGRST202', message: 'Could not find the function' });
         const fn = rpc[p.split('/').pop()];
         return fn ? send(200, fn(body())) : send(404, { message: 'no such function' });
       }
