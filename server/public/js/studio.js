@@ -1,17 +1,23 @@
 // The website studio: sign in, drop a batch of photos, pick a room per photo
-// and one style / instructions for the batch, stage them (two at a time),
-// then compare and download. Each staged photo uses one credit.
+// and one style / instructions for the batch, and stage them. Staging runs on
+// the server, so it finishes even if this page is closed; results are kept for
+// 30 days and listed under "Recent stagings". One credit per photo.
 (() => {
   const $ = (id) => document.getElementById(id);
   const ROOMS = [['auto', 'Auto-detect room'], ['living room', 'Living room'], ['bedroom', 'Bedroom'], ['primary bedroom', 'Primary bedroom'], ['dining room', 'Dining room'],
     ['kitchen', 'Kitchen'], ['home office', 'Home office'], ['bathroom', 'Bathroom'], ['studio apartment', 'Studio'], ['entryway', 'Entryway'],
     ['patio or balcony', 'Patio / balcony'], ['basement or bonus room', 'Basement / bonus room']];
+  const STYLE_NAMES = { modern: 'Modern', Scandinavian: 'Scandinavian', 'mid-century modern': 'Mid-century modern', transitional: 'Transitional',
+    'modern farmhouse': 'Modern farmhouse', coastal: 'Coastal', industrial: 'Industrial', traditional: 'Traditional' };
   const MAX_EDGE = 2048;
-  const CONCURRENT = 2;
+  const UPLOADS_AT_ONCE = 3;
+  const POLL_MS = 3000;
 
   let credits = null;
   let autoOn = false;
-  const items = []; // {id, file, name, room, status: ready|queued|running|done|error, el, before, after, startedAt}
+  const items = []; // photos added on this page: {id, file, name, room, status, jobId, before, after, ...}
+  let recent = []; // the account's stagings from the server
+  const results = new Map(); // job id -> object URL of the staged photo (cached)
   let seq = 0;
 
   const el = (tag, attrs = {}, ...kids) => {
@@ -41,6 +47,7 @@
     const out = $('signOut');
     if (out) out.hidden = false;
     loadBalance();
+    poll();
   }
 
   async function loadBalance() {
@@ -72,7 +79,7 @@
       $('tiles').append(render(it));
     }
     $('opts').hidden = !items.length;
-    $('addMsg').textContent = (bad.length ? `Skipped ${bad.length} file${bad.length === 1 ? '' : 's'} that ${bad.length === 1 ? "isn't" : "aren't"} JPEG, PNG or WebP (iPhone HEIC photos need converting first).` : '');
+    $('addMsg').textContent = bad.length ? `Skipped ${bad.length} file${bad.length === 1 ? '' : 's'} that ${bad.length === 1 ? "isn't" : "aren't"} JPEG, PNG or WebP (iPhone HEIC photos need converting first).` : '';
     refreshGo();
   }
 
@@ -104,10 +111,9 @@
   }
 
   function remove(it) {
-    if (it.status === 'running' || it.status === 'queued') return;
+    if (it.status === 'uploading') return;
     it.el.remove();
     URL.revokeObjectURL(it.before);
-    if (it.after) URL.revokeObjectURL(it.after);
     items.splice(items.indexOf(it), 1);
     $('opts').hidden = !items.length;
     refreshGo();
@@ -116,11 +122,11 @@
   function paint(it) {
     const state = it.el.querySelector('.state');
     const actions = it.el.querySelector('.actions');
-    it.el.className = 'tile ' + it.status;
+    it.el.className = 'tile ' + (it.status === 'uploading' ? 'running' : it.status);
     it.roomSel.disabled = it.status !== 'ready' && it.status !== 'error';
-    state.textContent = { queued: 'Waiting…', running: `Staging… ${progress(it)}%`, done: 'Staged', error: 'Failed' }[it.status] || '';
+    state.textContent = { uploading: 'Uploading…', running: `Staging… ${progress(it.startedAt)}%`, done: 'Staged', error: 'Failed' }[it.status] || '';
     actions.replaceChildren();
-    if (it.status === 'done') {
+    if (it.status === 'done' && it.after) {
       const toggle = el('button', { class: 'btn small', type: 'button', onclick: () => {
         const showingAfter = it.img.src === it.after;
         it.img.src = showingAfter ? it.before : it.after;
@@ -128,15 +134,15 @@
       } }, 'Show original');
       actions.append(toggle, el('a', { class: 'btn small primary', href: it.after, download: stagedName(it.name) }, 'Download'));
     } else if (it.status === 'error') {
-      actions.append(el('p', { class: 'msg bad' }, it.error), el('button', { class: 'btn small', type: 'button', onclick: () => queue([it]) }, 'Try again'));
+      actions.append(el('p', { class: 'msg bad' }, it.error), el('button', { class: 'btn small', type: 'button', onclick: () => submit([it]) }, 'Try again'));
       if (it.code === 'no-credits') actions.append(el('a', { class: 'btn small primary', href: '/account.html' }, 'Buy credits'));
     }
   }
 
-  const stagedName = (n) => n.replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[^\w.-]+/g, '_').slice(0, 80) + '-staged.jpg';
+  const stagedName = (n) => String(n || 'photo').replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[^\w.-]+/g, '_').slice(0, 80) + '-staged.jpg';
 
   // Estimated progress: the image service gives none, so this follows how long
-  // staging has usually taken in this browser (about 90% at the typical time).
+  // staging has usually taken (about 90% at the typical time, never 100 early).
   const typical = () => {
     try {
       return Math.max(15000, Number(localStorage.getItem('unitstager.typicalMs')) || 60000);
@@ -144,10 +150,18 @@
       return 60000;
     }
   };
-  const progress = (it) => Math.min(99, Math.max(1, Math.round(100 * (1 - Math.exp((-2.3 * (Date.now() - it.startedAt)) / typical())))));
-  setInterval(() => items.filter((i) => i.status === 'running').forEach(paint), 1000);
+  const progress = (since) => Math.min(99, Math.max(1, Math.round(100 * (1 - Math.exp((-2.3 * (Date.now() - since)) / typical())))));
+  const learn = (took) => {
+    try {
+      if (took > 5000 && took < 300000) localStorage.setItem('unitstager.typicalMs', String(Math.round(typical() * 0.7 + took * 0.3)));
+    } catch {}
+  };
+  setInterval(() => {
+    items.filter((i) => i.status === 'running').forEach(paint);
+    for (const row of document.querySelectorAll('[data-since]')) row.textContent = `Staging… ${progress(Number(row.dataset.since))}%`;
+  }, 1000);
 
-  // ---- staging ----------------------------------------------------------------
+  // ---- submitting -------------------------------------------------------------
   const waiting = () => items.filter((i) => i.status === 'ready');
 
   function refreshGo() {
@@ -158,30 +172,30 @@
     btn.disabled = !n || short;
     $('goMsg').replaceChildren();
     if (short) $('goMsg').append(`You have ${credits} credit${credits === 1 ? '' : 's'}. `, el('a', { href: '/account.html' }, 'Top up'), ' or remove some photos.');
-    $('afterAll').hidden = !items.some((i) => i.status === 'done');
+    $('afterAll').hidden = !items.some((i) => i.status === 'done' && i.after);
   }
 
-  $('stageBtn').addEventListener('click', () => queue(waiting()));
+  $('stageBtn').addEventListener('click', () => submit(waiting()));
 
-  function queue(list) {
+  let uploading = 0;
+  const pending = [];
+  function submit(list) {
     for (const it of list) {
-      it.status = 'queued';
+      it.status = 'uploading';
       it.error = '';
       paint(it);
+      pending.push(it);
     }
     refreshGo();
-    pump();
+    pumpUploads();
   }
-
-  let running = 0;
-  function pump() {
-    while (running < CONCURRENT) {
-      const it = items.find((i) => i.status === 'queued');
-      if (!it) return;
-      running++;
-      stage(it).finally(() => {
-        running--;
-        pump();
+  function pumpUploads() {
+    while (uploading < UPLOADS_AT_ONCE && pending.length) {
+      const it = pending.shift();
+      uploading++;
+      upload(it).finally(() => {
+        uploading--;
+        pumpUploads();
         refreshGo();
       });
     }
@@ -205,6 +219,49 @@
     bmp.close();
     const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9));
     return { blob, width: c.width, height: c.height };
+  }
+
+  async function upload(it) {
+    try {
+      const photo = await prepare(it.file);
+      const form = new FormData();
+      form.append('image', photo.blob, 'photo.jpg');
+      form.append('name', it.name);
+      form.append('room', it.room);
+      form.append('style', $('style').value);
+      form.append('custom', $('custom').value.trim());
+      form.append('label', $('label').checked ? '1' : '0');
+      form.append('width', String(photo.width));
+      form.append('height', String(photo.height));
+      const { data } = await US.api('/api/jobs', { method: 'POST', form });
+      it.jobId = data.id;
+      it.status = 'running';
+      it.startedAt = Date.now();
+      if (typeof data.credits === 'number') setCredits(data.credits);
+      if (autoOn && data.credits <= 3) setTimeout(loadBalance, 8000);
+      schedulePoll(POLL_MS);
+    } catch (e) {
+      it.status = 'error';
+      it.code = e.code;
+      it.error = e.message;
+      if (e.code === 'auth') setTimeout(start, 50);
+    }
+    paint(it);
+  }
+
+  // ---- results ----------------------------------------------------------------
+  // The stored result is the image service's JSON (base64 inside); decode it
+  // here and add the disclosure label if that staging asked for one.
+  async function resultUrl(job) {
+    if (results.has(job.id)) return results.get(job.id);
+    const { data } = await US.api(`/api/jobs/${job.id}/result`);
+    const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
+    if (!b64) throw new Error('The staged photo could not be read.');
+    let blob = new Blob([Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0))], { type: 'image/jpeg' });
+    if (job.label) blob = await addLabel(blob, 'Virtually staged');
+    const url = URL.createObjectURL(blob);
+    results.set(job.id, url);
+    return url;
   }
 
   async function addLabel(blob, text) {
@@ -231,59 +288,123 @@
     return new Promise((r) => c.toBlob(r, 'image/jpeg', 0.92));
   }
 
-  async function stage(it) {
-    it.status = 'running';
-    it.startedAt = Date.now();
-    paint(it);
+  // ---- polling ----------------------------------------------------------------
+  let pollTimer = null;
+  function schedulePoll(ms) {
+    clearTimeout(pollTimer);
+    pollTimer = setTimeout(poll, ms);
+  }
+
+  async function poll() {
+    let list;
     try {
-      const photo = await prepare(it.file);
-      const form = new FormData();
-      form.append('image', photo.blob, 'photo.jpg');
-      form.append('room', it.room);
-      form.append('style', $('style').value);
-      form.append('custom', $('custom').value.trim());
-      form.append('width', String(photo.width));
-      form.append('height', String(photo.height));
-      const { data, res } = await US.api('/api/stage', { method: 'POST', form });
-      const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
-      if (!b64) throw new Error('No image came back. Your credit was returned — try again.');
-      const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
-      let out = new Blob([bytes], { type: 'image/jpeg' });
-      if ($('label').checked) out = await addLabel(out, 'Virtually staged');
-      it.after = URL.createObjectURL(out);
-      it.img.src = it.after;
-      it.status = 'done';
-      const left = Number(res.headers.get('X-Credits'));
-      if (Number.isFinite(left)) setCredits(left);
-      if (autoOn && left <= 3) setTimeout(loadBalance, 8000);
-      const took = Date.now() - it.startedAt;
-      try {
-        if (took > 5000 && took < 300000) localStorage.setItem('unitstager.typicalMs', String(Math.round(typical() * 0.7 + took * 0.3)));
-      } catch {}
+      list = (await US.api('/api/jobs')).data.stagings || [];
     } catch (e) {
-      it.status = 'error';
-      it.code = e.code;
-      it.error = e.message;
-      if (e.code === 'auth') setTimeout(start, 50);
+      if (e.code === 'auth') return start();
+      return schedulePoll(POLL_MS * 3);
     }
-    paint(it);
+    recent = list;
+    const byId = new Map(list.map((j) => [j.id, j]));
+    for (const it of items.filter((i) => i.status === 'running' && i.jobId)) {
+      const job = byId.get(it.jobId);
+      if (!job) continue;
+      if (job.status === 'done') {
+        try {
+          it.after = await resultUrl(job);
+          it.img.src = it.after;
+          it.status = 'done';
+          learn(Date.now() - it.startedAt);
+        } catch (e) {
+          it.status = 'error';
+          it.error = e.message;
+        }
+        paint(it);
+      } else if (job.status === 'error') {
+        it.status = 'error';
+        it.error = job.error || 'Staging failed. Your credit was returned.';
+        paint(it);
+        loadBalance();
+      }
+    }
+    renderRecent();
+    refreshGo();
+    const busy = list.some((j) => j.status === 'queued' || j.status === 'running') || items.some((i) => i.status === 'uploading');
+    if (busy) schedulePoll(POLL_MS);
+  }
+
+  // ---- recent stagings --------------------------------------------------------
+  const fmt = (d) => new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+  function renderRecent() {
+    $('recent').hidden = !recent.length;
+    $('recentCount').textContent = recent.length ? `${recent.length} in the last 30 days` : '';
+    $('recentBody').replaceChildren(
+      ...recent.map((job) => {
+        const acts = el('div', { class: 'acts' });
+        let status;
+        if (job.status === 'done') {
+          status = fmt(job.finished_at || job.created_at);
+          acts.append(
+            el('button', { class: 'btn small primary', type: 'button', onclick: (e) => download(job, e.currentTarget) }, 'Download'),
+            el('button', { class: 'btn small', type: 'button', 'aria-label': `Delete ${job.name}`, onclick: () => removeJob(job) }, 'Delete'));
+        } else if (job.status === 'error') {
+          status = el('span', { class: 'st-err', title: job.error || '' }, 'Failed — credit returned');
+          acts.append(el('button', { class: 'btn small', type: 'button', 'aria-label': `Delete ${job.name}`, onclick: () => removeJob(job) }, 'Delete'));
+        } else {
+          status = el('span', { 'data-since': String(Date.parse(job.created_at)) }, `Staging… ${progress(Date.parse(job.created_at))}%`);
+        }
+        return el('tr', {},
+          el('td', {}, el('div', { class: 'nm', title: job.name }, job.name)),
+          el('td', {}, STYLE_NAMES[job.style] || job.style || ''),
+          el('td', {}, status),
+          el('td', { class: 'muted' }, fmt(job.expires_at)),
+          el('td', {}, acts));
+      })
+    );
+  }
+
+  async function download(job, btn) {
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Preparing…';
+    try {
+      el('a', { href: await resultUrl(job), download: stagedName(job.name) }).click();
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
+  async function removeJob(job) {
+    if (!confirm(`Delete the staged photo "${job.name}"? This can't be undone.`)) return;
+    try {
+      await US.api(`/api/jobs/${job.id}`, { method: 'DELETE' });
+      recent = recent.filter((j) => j.id !== job.id);
+      renderRecent();
+    } catch (e) {
+      alert(e.message);
+    }
   }
 
   // ---- after ------------------------------------------------------------------
   $('downloadAll').addEventListener('click', async () => {
-    for (const it of items.filter((i) => i.status === 'done')) {
+    for (const it of items.filter((i) => i.status === 'done' && i.after)) {
       el('a', { href: it.after, download: stagedName(it.name) }).click();
       await new Promise((r) => setTimeout(r, 400));
     }
   });
   $('clearDone').addEventListener('click', () => items.filter((i) => i.status === 'done').forEach(remove));
 
+  // Only an upload still in progress is lost by leaving; staging itself carries on.
   addEventListener('beforeunload', (e) => {
-    if (items.some((i) => i.status === 'running' || i.status === 'queued') || items.some((i) => i.status === 'done')) {
+    if (items.some((i) => i.status === 'uploading')) {
       e.preventDefault();
       e.returnValue = '';
     }
   });
+  addEventListener('visibilitychange', () => document.visibilityState === 'visible' && US.signedIn() && poll());
 
   start();
 })();

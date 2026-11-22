@@ -86,6 +86,36 @@ try {
   if (shots) await page.screenshot({ path: shots + '/studio-done.png', fullPage: true });
   await page.locator('#files').setInputFiles([photo('extra.jpg')]);
   assert(await page.locator('#stageBtn').isDisabled(), 'with 0 credits a new photo cannot be staged');
+  await page.locator('#recentBody tr').nth(1).waitFor();
+  assert((await page.locator('#recentBody tr').count()) === 2 && /Coastal/.test(await page.locator('#recentBody').innerText()), 'both appear under Recent stagings');
+
+  console.log('Closing the page mid-staging');
+  const userKey = [...mock.state.users.values()].find((u) => u.email === 'newpm@example.com').id;
+  mock.state.accounts.set(userKey, 3);
+  mock.state.imageDelay = 2500;
+  page = await ctx.newPage();
+  watch(page);
+  await page.goto(site + '/app.html');
+  await page.locator('#files').setInputFiles([photo('closed-early.jpg')]);
+  await page.locator('#stageBtn').click();
+  await page.locator('.tile.running .state', { hasText: 'Staging' }).waitFor();
+  await page.close({ runBeforeUnload: false });
+  assert(true, 'page closed while the photo was still staging');
+  await app.idle();
+  mock.state.imageDelay = 300;
+  page = await ctx.newPage();
+  watch(page);
+  await page.goto(site + '/app.html');
+  const row = page.locator('#recentBody tr', { hasText: 'closed-early.jpg' });
+  await row.locator('button', { hasText: 'Download' }).waitFor();
+  const [dlFile] = await Promise.all([page.waitForEvent('download'), row.locator('button', { hasText: 'Download' }).click()]);
+  assert(dlFile.suggestedFilename() === 'closed-early-staged.jpg', 'it finished anyway, and downloads from Recent stagings when you come back');
+  if (shots) await page.screenshot({ path: shots + '/studio-recent.png', fullPage: true });
+  page.once('dialog', (d) => d.accept());
+  await row.locator('button', { hasText: 'Delete' }).click();
+  await row.waitFor({ state: 'detached' });
+  assert(![...mock.state.stagings.values()].some((j) => j.name === 'closed-early.jpg'), 'Delete removes it');
+  mock.state.accounts.set(userKey, 0);
 
   console.log('Account');
   page.on('dialog', (d) => d.accept());

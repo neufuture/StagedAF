@@ -353,3 +353,101 @@ test('payment settings: opens the Stripe portal, creating the customer once if n
   assert.equal(r3.data.code, 'portal-config');
   assert.equal((await call('/api/billing-portal', { method: 'POST' })).status, 401);
 });
+
+// ---- background staging (jobs) ----------------------------------------------
+
+const jobCall = (token, extra) => call('/api/jobs', { method: 'POST', token, raw: photo({ name: 'Unit 4 living.jpg', label: '1', ...extra }) });
+const waitFor = async (fn, ms = 8000) => {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    const v = await fn();
+    if (v) return v;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error('timed out waiting');
+};
+const jobsOf = async (token) => (await call('/api/jobs', { token })).data.stagings;
+
+test('jobs: staging finishes on the server and the result is kept for download', async () => {
+  const s = await signIn('jobs@example.com'); // 2 credits
+  const r = await jobCall(s.access_token);
+  assert.equal(r.status, 202);
+  assert.equal(r.data.credits, 1);
+  assert.match(r.data.id, /^[0-9a-f-]{36}$/);
+  // Nobody is waiting on the response any more: the queue worker finishes the job.
+  const done = await waitFor(async () => (await jobsOf(s.access_token)).find((j) => j.id === r.data.id && j.status === 'done'));
+  assert.equal(done.name, 'Unit 4 living.jpg');
+  assert.equal(done.style, 'coastal');
+  assert.equal(done.label, true);
+  assert.ok(Date.parse(done.expires_at) - Date.parse(done.created_at) === 30 * 86400000, 'expires 30 days after it was made');
+  const sent = state.image.at(-1);
+  assert.match(sent.prompt, /photo of a bedroom/);
+  assert.match(sent.prompt, /blue rug/);
+  assert.equal(sent.auth, 'Bearer sk-server');
+  const result = await call(`/api/jobs/${r.data.id}/result`, { token: s.access_token });
+  assert.equal(result.status, 200);
+  assert.equal(result.data.data[0].b64_json, 'c3RhZ2Vk');
+  assert.equal([...app.photos.files.keys()].filter((k) => k.includes(r.data.id)).join(), `stagings/${s.user.id}/${r.data.id}/staged.json`, 'the uploaded original is removed once staged');
+
+  const other = await signIn('notyours@example.com');
+  assert.equal((await call(`/api/jobs/${r.data.id}/result`, { token: other.access_token })).status, 404, "someone else's result is not reachable");
+  assert.equal((await jobsOf(other.access_token)).length, 0);
+  assert.equal((await call('/api/jobs/not-an-id/result', { token: s.access_token })).status, 404);
+});
+
+test('jobs: out of credits means nothing is queued or stored', async () => {
+  const s = await signIn('jobsbroke@example.com');
+  state.accounts.set(s.user.id, 0);
+  const before = app.queue.sent.length;
+  const r = await jobCall(s.access_token);
+  assert.equal(r.status, 402);
+  assert.equal(r.data.code, 'no-credits');
+  assert.equal(app.queue.sent.length, before);
+  assert.equal([...app.photos.files.keys()].some((k) => k.includes(s.user.id)), false);
+});
+
+test('jobs: a passing image-service hiccup is retried; a real failure refunds once', async () => {
+  const s = await signIn('jobsretry@example.com');
+  state.failImage = 1; // first attempt gets HTTP 500, the retry succeeds
+  const r1 = await jobCall(s.access_token);
+  await waitFor(async () => (await jobsOf(s.access_token)).find((j) => j.id === r1.data.id && j.status === 'done'));
+  assert.equal(state.accounts.get(s.user.id), 1, 'retried and succeeded: one credit used');
+
+  state.declineImage = 1; // declined by moderation: not retried
+  const r2 = await jobCall(s.access_token);
+  const failed = await waitFor(async () => (await jobsOf(s.access_token)).find((j) => j.id === r2.data.id && j.status === 'error'));
+  assert.match(failed.error, /declined/);
+  assert.equal(state.accounts.get(s.user.id), 1, 'credit refunded');
+  assert.equal([...app.photos.files.keys()].some((k) => k.includes(r2.data.id)), false, 'nothing kept for a failed staging');
+
+  state.failImage = 10; // keeps failing: gives up after the retries, refunds
+  const r3 = await jobCall(s.access_token);
+  await waitFor(async () => (await jobsOf(s.access_token)).find((j) => j.id === r3.data.id && j.status === 'error'));
+  state.failImage = 0;
+  await app.idle();
+  assert.equal(state.accounts.get(s.user.id), 1, 'refunded once, not once per attempt');
+  assert.equal((await call(`/api/jobs/${r3.data.id}/result`, { token: s.access_token })).status, 404);
+});
+
+test('jobs: delete, and the hourly cleanup of stuck and 30-day-old stagings', async () => {
+  const s = await signIn('jobsclean@example.com');
+  state.accounts.set(s.user.id, 5);
+  const a = (await jobCall(s.access_token)).data.id;
+  const b = (await jobCall(s.access_token)).data.id;
+  await waitFor(async () => (await jobsOf(s.access_token)).filter((j) => j.status === 'done').length === 2);
+  assert.equal((await call(`/api/jobs/${a}`, { method: 'DELETE', token: s.access_token })).status, 200);
+  assert.equal((await jobsOf(s.access_token)).length, 1);
+  assert.equal([...app.photos.files.keys()].some((k) => k.includes(a)), false, 'deleting removes the stored photo');
+
+  state.stagings.get(b).created_at = new Date(Date.now() - 31 * 86400000).toISOString();
+  const stuck = 'aaaaaaaa-0000-4000-8000-000000000009';
+  state.stagings.set(stuck, { id: stuck, user_id: s.user.id, name: 'x.jpg', status: 'running', created_at: new Date(Date.now() - 3600000).toISOString() });
+  await app.photos.put(`stagings/${s.user.id}/${stuck}/original.jpg`, new Uint8Array(3));
+  const credits = state.accounts.get(s.user.id);
+  await app.cron();
+  await app.idle();
+  assert.equal(state.stagings.has(b), false, '31-day-old staging purged');
+  assert.equal([...app.photos.files.keys()].some((k) => k.includes(b) || k.includes(stuck + '/original')), false, 'and its files deleted');
+  assert.equal(state.stagings.get(stuck).status, 'error', 'stuck job failed');
+  assert.equal(state.accounts.get(s.user.id), credits + 1, '…with its credit refunded');
+});

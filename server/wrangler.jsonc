@@ -11,6 +11,17 @@
     "run_worker_first": ["/api/*"]
   },
   "observability": { "enabled": true },
+  // Staged photos are kept here for 30 days. Create the bucket once in the
+  // Cloudflare dashboard (R2 → Create bucket) with exactly this name.
+  "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "unitstager-photos" }],
+  // Background staging. Create the queue once (Workers & Pages → Queues →
+  // Create) with exactly this name.
+  "queues": {
+    "producers": [{ "binding": "STAGING_QUEUE", "queue": "unitstager-staging" }],
+    "consumers": [{ "queue": "unitstager-staging", "max_batch_size": 1, "max_retries": 3 }]
+  },
+  // Hourly cleanup: stuck jobs are refunded, stagings older than 30 days deleted.
+  "triggers": { "crons": ["17 * * * *"] },
   "vars": {
     "SITE_URL": "https://unitstager.com",
     "OPENAI_MODEL": "gpt-image-2",

@@ -52,6 +52,11 @@
       </div>
       <div class="tiles" id="tiles"></div>
       <div class="after-all" id="afterAll" hidden><button class="btn" id="downloadAll" type="button">Download all staged photos</button> <button class="btn" id="clearDone" type="button">Clear finished</button></div>
+      <p class="muted keep-note">Staging carries on if you close this page. Staged photos are kept for 30 days under <b>Recent stagings</b>, then deleted.</p>
+      <div class="recent" id="recent" hidden>
+        <div class="bar"><h2>Recent stagings</h2><span class="muted" id="recentCount"></span></div>
+        <table class="tx recent-list"><thead><tr><th>Photo</th><th>Style</th><th>Staged</th><th>Kept until</th><th></th></tr></thead><tbody id="recentBody"></tbody></table>
+      </div>
     </section>
   </main>
   <footer>

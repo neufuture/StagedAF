@@ -20,6 +20,7 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
     declineImage: 0, // ...or be declined by moderation
     rejectFidelity: true, // behave like a model that rejects input_fidelity
     imageDelay: 300,
+    stagings: new Map(),
   };
   const userFor = (email) => {
     if (!state.users.has(email)) state.users.set(email, { id: crypto.randomUUID(), email });
@@ -65,6 +66,60 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
       if (!a.customer) a.customer = p_customer;
       state.auto.set(p_user, a);
       return a.customer;
+    },
+    // ---- background stagings ----
+    create_staging(a) {
+      const c = state.accounts.get(a.p_user) || 0;
+      if (c <= 0) return -1;
+      state.accounts.set(a.p_user, c - 1);
+      state.ledger.push({ user: a.p_user, delta: -1, reason: 'stage', ref: 'stage:' + a.p_id, at: new Date().toISOString() });
+      state.stagings.set(a.p_id, { id: a.p_id, user_id: a.p_user, name: a.p_name, room: a.p_room, style: a.p_style, custom: a.p_custom, width: a.p_width, height: a.p_height,
+        label: !!a.p_label, status: 'queued', error: null, created_at: new Date().toISOString(), finished_at: null });
+      return c - 1;
+    },
+    start_staging({ p_id }) {
+      const j = state.stagings.get(p_id);
+      if (!j || !['queued', 'running'].includes(j.status)) return null;
+      j.status = 'running';
+      return { id: j.id, user_id: j.user_id, room: j.room, style: j.style, custom: j.custom, width: j.width, height: j.height };
+    },
+    finish_staging({ p_id, p_ok, p_error }) {
+      const j = state.stagings.get(p_id);
+      if (!j || !['queued', 'running'].includes(j.status)) return false;
+      j.status = p_ok ? 'done' : 'error';
+      j.error = p_ok ? null : p_error;
+      j.finished_at = new Date().toISOString();
+      if (!p_ok && !state.refs.has('refund:' + p_id)) {
+        state.refs.add('refund:' + p_id);
+        state.accounts.set(j.user_id, (state.accounts.get(j.user_id) || 0) + 1);
+        state.ledger.push({ user: j.user_id, delta: 1, reason: 'refund', ref: 'refund:' + p_id });
+      }
+      return true;
+    },
+    list_stagings({ p_user }) {
+      return [...state.stagings.values()].filter((j) => j.user_id === p_user).reverse().map(({ id, name, room, style, label, status, error, created_at, finished_at }) => ({ id, name, room, style, label, status, error, created_at, finished_at }));
+    },
+    staging_status({ p_user, p_id }) {
+      const j = state.stagings.get(p_id);
+      return j && j.user_id === p_user ? j.status : null;
+    },
+    delete_staging({ p_user, p_id }) {
+      const j = state.stagings.get(p_id);
+      if (!j || j.user_id !== p_user || !['done', 'error'].includes(j.status)) return false;
+      state.stagings.delete(p_id);
+      return true;
+    },
+    purge_stagings({ p_days }) {
+      const cut = Date.now() - p_days * 86400000;
+      const gone = [...state.stagings.values()].filter((j) => Date.parse(j.created_at) < cut);
+      for (const j of gone) state.stagings.delete(j.id);
+      return gone.map((j) => ({ id: j.id, user_id: j.user_id }));
+    },
+    fail_stale_stagings({ p_minutes }) {
+      const cut = Date.now() - p_minutes * 60000;
+      const stuck = [...state.stagings.values()].filter((j) => ['queued', 'running'].includes(j.status) && Date.parse(j.created_at) < cut);
+      for (const j of stuck) rpc.finish_staging({ p_id: j.id, p_ok: false, p_error: 'Staging took too long and was stopped. Your credit was returned.' });
+      return stuck.map((j) => ({ id: j.id, user_id: j.user_id }));
     },
     note_payment({ p_ref, p_cents }) {
       const row = state.ledger.find((l) => l.ref === p_ref);

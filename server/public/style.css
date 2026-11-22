@@ -187,3 +187,11 @@ table.tx td:last-child, table.tx th:last-child { text-align: right; padding-righ
 .hero .sub a.strong { color: var(--text); font-weight: 700; }
 nav a.nav-cta { color: var(--accent); font-weight: 700; }
 .appbody main > section { border-top: 0; padding-top: 0; }
+.keep-note { font-size: 14px; margin: 18px 0 0; }
+.recent { margin-top: 34px; }
+.recent h2 { margin: 0; font-size: 20px; }
+.recent-list td { vertical-align: middle; }
+.recent-list .nm { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.recent-list .acts { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.recent-list .st-err { color: #b91c1c; font-size: 13.5px; }
+@media (max-width: 640px) { .recent-list th:nth-child(2), .recent-list td:nth-child(2), .recent-list th:nth-child(4), .recent-list td:nth-child(4) { display: none; } }

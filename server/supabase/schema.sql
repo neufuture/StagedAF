@@ -153,3 +153,124 @@ revoke all on function public.add_credits(uuid, integer, text, text) from public
 grant execute on function public.ensure_account(uuid, text, integer) to service_role;
 grant execute on function public.spend_credit(uuid, text) to service_role;
 grant execute on function public.add_credits(uuid, integer, text, text) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- Background stagings. Each photo staged through the website or extension is
+-- a row here; the staged result is kept in Cloudflare R2 for 30 days.
+
+create table if not exists public.stagings (
+  id          uuid primary key,
+  user_id     uuid not null references public.accounts (user_id) on delete cascade,
+  name        text not null,
+  room        text,
+  style       text,
+  custom      text,
+  width       integer,
+  height      integer,
+  label       boolean not null default false,
+  status      text not null default 'queued' check (status in ('queued', 'running', 'done', 'error')),
+  error       text,
+  created_at  timestamptz not null default now(),
+  started_at  timestamptz,
+  finished_at timestamptz
+);
+create index if not exists stagings_user_idx on public.stagings (user_id, created_at desc);
+alter table public.stagings enable row level security;
+
+-- Take one credit and record the staging, together. Returns the new balance,
+-- or -1 if there were no credits (and nothing is recorded).
+create or replace function public.create_staging(p_user uuid, p_id uuid, p_name text, p_room text, p_style text, p_custom text,
+                                                 p_width integer, p_height integer, p_label boolean)
+returns integer language plpgsql security definer set search_path = public as $$
+declare v integer;
+begin
+  update accounts set credits = credits - 1 where user_id = p_user and credits > 0 returning credits into v;
+  if not found then return -1; end if;
+  insert into credit_ledger (user_id, delta, reason, ref) values (p_user, -1, 'stage', 'stage:' || p_id);
+  insert into stagings (id, user_id, name, room, style, custom, width, height, label)
+    values (p_id, p_user, p_name, p_room, p_style, p_custom, p_width, p_height, coalesce(p_label, false));
+  return v;
+end $$;
+
+-- The worker's view of a job, and marking it started.
+create or replace function public.start_staging(p_id uuid)
+returns json language plpgsql security definer set search_path = public as $$
+declare v json;
+begin
+  update stagings set status = 'running', started_at = coalesce(started_at, now())
+  where id = p_id and status in ('queued', 'running')
+  returning json_build_object('id', id, 'user_id', user_id, 'room', room, 'style', style, 'custom', custom, 'width', width, 'height', height) into v;
+  return v;
+end $$;
+
+-- Finish a job. On failure the credit is refunded, exactly once. Finishing a
+-- job that is already finished does nothing. Returns true if this call finished it.
+create or replace function public.finish_staging(p_id uuid, p_ok boolean, p_error text)
+returns boolean language plpgsql security definer set search_path = public as $$
+declare u uuid;
+begin
+  update stagings set status = case when p_ok then 'done' else 'error' end, error = case when p_ok then null else p_error end, finished_at = now()
+  where id = p_id and status in ('queued', 'running')
+  returning user_id into u;
+  if u is null then return false; end if;
+  if not p_ok then
+    insert into credit_ledger (user_id, delta, reason, ref) values (u, 1, 'refund', 'refund:' || p_id) on conflict (ref) do nothing;
+    if found then update accounts set credits = credits + 1 where user_id = u; end if;
+  end if;
+  return true;
+end $$;
+
+-- An account's stagings from the last p_days days, newest first.
+create or replace function public.list_stagings(p_user uuid, p_days integer)
+returns json language sql security definer set search_path = public as $$
+  select coalesce(json_agg(row_to_json(x)), '[]'::json) from (
+    select id, name, room, style, label, status, error, created_at, finished_at
+    from stagings where user_id = p_user and created_at > now() - make_interval(days => p_days)
+    order by created_at desc limit 300
+  ) x;
+$$;
+
+-- Is this staging the account's, and finished? Returns its status, or null.
+create or replace function public.staging_status(p_user uuid, p_id uuid)
+returns text language sql security definer set search_path = public as $$
+  select status from stagings where id = p_id and user_id = p_user;
+$$;
+
+-- Delete one finished staging. Returns true if it was deleted.
+create or replace function public.delete_staging(p_user uuid, p_id uuid)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  delete from stagings where id = p_id and user_id = p_user and status in ('done', 'error');
+  return found;
+end $$;
+
+-- Remove stagings older than p_days; returns what was removed so its files can be deleted.
+create or replace function public.purge_stagings(p_days integer)
+returns json language sql security definer set search_path = public as $$
+  with gone as (delete from stagings where created_at < now() - make_interval(days => p_days) returning id, user_id)
+  select coalesce(json_agg(row_to_json(gone)), '[]'::json) from gone;
+$$;
+
+-- Jobs stuck for more than p_minutes (the worker died): fail them with a refund.
+create or replace function public.fail_stale_stagings(p_minutes integer)
+returns json language plpgsql security definer set search_path = public as $$
+declare r record; out json := '[]'::json; ids uuid[] := '{}';
+begin
+  for r in select id, user_id from stagings where status in ('queued', 'running') and created_at < now() - make_interval(mins => p_minutes) loop
+    perform finish_staging(r.id, false, 'Staging took too long and was stopped. Your credit was returned.');
+    ids := ids || r.id;
+  end loop;
+  select coalesce(json_agg(json_build_object('id', s.id, 'user_id', s.user_id)), '[]'::json) into out from stagings s where s.id = any(ids);
+  return out;
+end $$;
+
+do $$
+declare f text;
+begin
+  foreach f in array array['create_staging(uuid, uuid, text, text, text, text, integer, integer, boolean)', 'start_staging(uuid)',
+    'finish_staging(uuid, boolean, text)', 'list_stagings(uuid, integer)', 'staging_status(uuid, uuid)', 'delete_staging(uuid, uuid)',
+    'purge_stagings(integer)', 'fail_stale_stagings(integer)'] loop
+    execute format('revoke all on function public.%s from public, anon, authenticated', f);
+    execute format('grant execute on function public.%s to service_role', f);
+  end loop;
+end $$;

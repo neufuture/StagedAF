@@ -75,7 +75,7 @@ export async function requireUser(env, request) {
 }
 
 // Call one of the database functions in supabase/schema.sql.
-async function rpc(env, fn, args) {
+export async function rpc(env, fn, args) {
   requireEnv(env, 'SUPABASE_URL', 'SUPABASE_SECRET_KEY');
   const res = await fetch(`${base(env)}/rest/v1/rpc/${fn}`, {
     method: 'POST',

@@ -24,7 +24,7 @@ function matchedSize(w, h) {
 
 const quirks = new Map(); // model -> what it rejected, remembered while this instance lives
 
-async function callImageModel(env, { image, prompt, width, height }) {
+export async function callImageModel(env, { image, prompt, width, height }) {
   const model = env.OPENAI_MODEL || 'gpt-image-2';
   const learned = quirks.get(model) || { drop: new Set(), standardSize: false };
   quirks.set(model, learned);
@@ -71,8 +71,9 @@ async function callImageModel(env, { image, prompt, width, height }) {
   return { ok: false, ...last };
 }
 
-export async function stage(request, env, user, ctx) {
-  requireEnv(env, 'OPENAI_API_KEY');
+// Read and check a staging upload (multipart: image, room, style, custom,
+// width, height, and optionally name and label).
+export async function readUpload(request) {
   let form;
   try {
     form = await request.formData();
@@ -85,7 +86,33 @@ export async function stage(request, env, user, ctx) {
   if (!/^image\/(jpeg|png|webp)$/.test(image.type)) throw new HttpError(415, 'Photos must be JPEG, PNG or WebP.');
   const width = Math.min(8192, Math.max(1, parseInt(form.get('width'), 10) || 1536));
   const height = Math.min(8192, Math.max(1, parseInt(form.get('height'), 10) || 1024));
-  const prompt = buildPrompt({ room: form.get('room'), style: form.get('style'), custom: form.get('custom') });
+  const clip = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
+  return {
+    image,
+    width,
+    height,
+    room: clip(form.get('room'), 40) || 'auto',
+    style: clip(form.get('style'), 40) || 'modern',
+    custom: clip(form.get('custom'), 600),
+    name: clip(form.get('name'), 120).replace(/[\\/]/g, '_') || 'photo.jpg',
+    label: form.get('label') === '1',
+  };
+}
+
+// How an image-service failure is explained to the customer.
+export function describeFailure(out) {
+  const declined = out.status === 400 && /moderation|safety|content.policy/i.test(`${out.code} ${out.type} ${out.message}`);
+  return declined
+    ? { status: 422, code: 'declined', message: 'The image service declined this photo or these instructions. Your credit was returned.' }
+    : { status: 502, code: 'upstream', message: 'Staging failed on our side. Your credit was returned — try again.' };
+}
+
+// The original, wait-for-the-result endpoint. Kept for extension versions
+// published before background staging existed.
+export async function stage(request, env, user, ctx) {
+  requireEnv(env, 'OPENAI_API_KEY');
+  const { image, width, height, room, style, custom } = await readUpload(request);
+  const prompt = buildPrompt({ room, style, custom });
 
   const job = crypto.randomUUID();
   const credits = await spendCredit(env, user.id, 'stage:' + job);
@@ -104,12 +131,8 @@ export async function stage(request, env, user, ctx) {
   if (!out.ok) {
     await refund();
     console.error('image service error', out.status, out.code, out.message);
-    const declined = out.status === 400 && /moderation|safety|content.policy/i.test(`${out.code} ${out.type} ${out.message}`);
-    throw new HttpError(
-      declined ? 422 : 502,
-      declined ? 'The image service declined this photo or these instructions. Your credit was returned.' : 'Staging failed on our side. Your credit was returned — try again.',
-      declined ? 'declined' : 'upstream'
-    );
+    const f = describeFailure(out);
+    throw new HttpError(f.status, f.message, f.code);
   }
   // Low balance with auto top-up on? Buy more in the background, after replying.
   const topUp = maybeAutoTopUp(env, user, credits);

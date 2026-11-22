@@ -64,6 +64,7 @@ const assert = (cond, msg) => {
     assert(calls[1].auth === 'Bearer sk-server' && calls[1].hasImage && calls[1].size === '1536x1024', "staged through the server with the server's key, image and aspect-matched size");
     await page.locator('unit-stager .dock', { hasText: '49 credits left' }).waitFor();
     assert(true, 'one credit used; balance shown in the panel');
+    assert([...mock.state.stagings.values()].some((j) => j.name === 'living.jpg' && j.status === 'done'), 'extension stagings run in the background and are kept like the website\'s');
     await page.locator('unit-stager .chip.ready').click();
     await page.locator('unit-stager .modal canvas.thumb').nth(1).waitFor();
     await page.waitForTimeout(400);
@@ -80,11 +81,11 @@ const assert = (cond, msg) => {
     assert((await page.locator('unit-stager .toast', { hasText: 'Staged photo is ready' }).count()) === 0, 'stale "ready" toast cleared once reviewed');
 
     console.log('Failure handling');
-    mock.state.failImage = 1;
+    mock.state.declineImage = 1; // not retried, unlike a passing server error
     await chip.first().click();
     await page.locator('unit-stager .pop button.primary').click();
     await page.locator('unit-stager .chip.failed').waitFor({ timeout: 30000 });
-    assert(await page.locator('unit-stager .toast.error', { hasText: 'credit was returned' }).count(), 'failure surfaced to the user');
+    assert(await page.locator('unit-stager .toast.error', { hasText: 'credit was returned' }).count(), 'a declined photo is reported to the user');
     await page.locator('unit-stager .dock', { hasText: '49 credits left' }).waitFor();
     assert(true, 'failed staging cost no credit');
     assert((await page.evaluate(() => window.__deleted.length)) === 1, 'nothing deleted on failure');

@@ -60,7 +60,28 @@ V=22222222-2222-2222-2222-222222222222
 q -c "insert into auth.users values ('$V')"; q -c "select ensure_account('$V','v@b.co',0)" >/dev/null
 check "first Stripe customer is stored"              "$(q -c "select set_stripe_customer('$V','cus_a')")" cus_a
 check "a second one does not replace it"             "$(q -c "select set_stripe_customer('$V','cus_b')")" cus_a
+# Background stagings.
+W=33333333-3333-3333-3333-333333333333; J1=aaaaaaaa-0000-0000-0000-000000000001; J2=aaaaaaaa-0000-0000-0000-000000000002; J3=aaaaaaaa-0000-0000-0000-000000000003
+q -c "insert into auth.users values ('$W')"; q -c "select ensure_account('$W','w@b.co',2)" >/dev/null
+check "create_staging takes a credit"                "$(q -c "select create_staging('$W','$J1','a.jpg','bedroom','coastal','',1200,800,true)")" 1
+check "…and records the job as queued"               "$(q -c "select status from stagings where id='$J1'")" queued
+check "second staging takes the last credit"         "$(q -c "select create_staging('$W','$J2','b.jpg','auto','modern','',1200,800,false)")" 0
+check "no credit, no job"                            "$(q -c "select create_staging('$W','$J3','c.jpg','auto','modern','',1200,800,false)")||$(q -c "select count(*) from stagings where id='$J3'")" "-1||0"
+check "start_staging hands the worker the job"       "$(q -c "select start_staging('$J1')->>'style'")" coastal
+check "finishing ok marks it done"                   "$(q -c "select finish_staging('$J1', true, null)")/$(q -c "select status from stagings where id='$J1'")" "t/done"
+check "finishing twice does nothing"                 "$(q -c "select finish_staging('$J1', false, 'x')")/$(q -c "select status from stagings where id='$J1'")" "f/done"
+check "a failure refunds the credit"                 "$(q -c "select finish_staging('$J2', false, 'boom')")/$(q -c "select credits from accounts where user_id='$W'")" "t/1"
+check "…only once"                                   "$(q -c "select finish_staging('$J2', false, 'boom')")/$(q -c "select credits from accounts where user_id='$W'")" "f/1"
+check "list shows both, newest first"                "$(q -c "select string_agg(x->>'status', ',') from json_array_elements(list_stagings('$W', 30)) x")" "error,done"
+check "status is only visible to its owner"          "$(q -c "select coalesce(staging_status('$W','$J1'),'-')")/$(q -c "select coalesce(staging_status('$U','$J1'),'-')")" "done/-"
+check "a running job cannot be deleted"              "$(q -c "select create_staging('$W','$J3','c.jpg','auto','modern','',1200,800,false)") $(q -c "select delete_staging('$W','$J3')")" "0 f"
+q -c "update stagings set created_at = now() - interval '30 minutes' where id='$J3'"
+check "a stuck job is failed and refunded"           "$(q -c "select json_array_length(fail_stale_stagings(20))")/$(q -c "select status from stagings where id='$J3'")/$(q -c "select credits from accounts where user_id='$W'")" "1/error/1"
+check "a finished job can be deleted"                "$(q -c "select delete_staging('$W','$J3')")" t
+q -c "update stagings set created_at = now() - interval '31 days' where id='$J2'"
+check "purge removes stagings older than 30 days"    "$(q -c "select json_array_length(purge_stagings(30))")/$(q -c "select count(*) from stagings where user_id='$W'")" "1/1"
+check "browser roles cannot reach stagings"          "$(q -c "select has_function_privilege('anon','create_staging(uuid,uuid,text,text,text,text,integer,integer,boolean)','execute') or has_function_privilege('authenticated','list_stagings(uuid,integer)','execute') or has_function_privilege('anon','finish_staging(uuid,boolean,text)','execute')")" f
 check "browser roles cannot call spend_credit"       "$(q -c "select has_function_privilege('authenticated','spend_credit(uuid,text)','execute') or has_function_privilege('anon','add_credits(uuid,integer,text,text)','execute') or has_function_privilege('anon','claim_auto_topup(uuid,integer,integer)','execute') or has_function_privilege('authenticated','set_auto_topup(uuid,text,text)','execute') or has_function_privilege('anon','get_account(uuid)','execute') or has_function_privilege('authenticated','list_purchases(uuid)','execute') or has_function_privilege('anon','note_payment(text,integer)','execute') or has_function_privilege('authenticated','set_stripe_customer(uuid,text)','execute')")" f
 check "server role can"                              "$(q -c "select has_function_privilege('service_role','add_credits(uuid,integer,text,text)','execute')")" t
-check "row level security is on"                     "$(q -c "select bool_and(relrowsecurity) from pg_class where relname in ('accounts','credit_ledger')")" t
+check "row level security is on"                     "$(q -c "select bool_and(relrowsecurity) from pg_class where relname in ('accounts','credit_ledger','stagings')")" t
 [ $fail = 0 ] && echo "SCHEMA OK" || { echo "SCHEMA FAILED"; exit 1; }

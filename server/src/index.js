@@ -12,9 +12,11 @@
 //   GET  /api/purchases                              -> the account's purchases
 //   POST /api/receipt        {id}                    -> Stripe receipt URL for one purchase
 //   POST /api/stripe/webhook                         Stripe -> add purchased credits
+//   POST/GET /api/jobs, GET /api/jobs/<id>/result, DELETE /api/jobs/<id>   background staging (jobs.js)
 //
 // Everything else is the static website in ./public.
 import { CORS, HttpError, json, readJson } from './http.js';
+import { cleanup, createJob, deleteJob, jobResult, listJobs, runJob } from './jobs.js';
 import { stage } from './stage.js';
 import { AUTO_THRESHOLD, billingPortal, createCheckout, publicPacks, purchases, receipt, webhook } from './stripe.js';
 import { ensureAccount, getAccount, refreshSession, requireUser, sendCode, setAutoTopup, verifyCode } from './supabase.js';
@@ -78,7 +80,14 @@ async function api(request, env, path, ctx) {
     }
     case 'POST /api/stripe/webhook':
       return webhook(request, env);
+    case 'POST /api/jobs':
+      return createJob(request, env, await requireUser(env, request), ctx);
+    case 'GET /api/jobs':
+      return listJobs(env, await requireUser(env, request));
   }
+  const job = /^\/api\/jobs\/([^/]+)(\/result)?$/.exec(path);
+  if (job && request.method === 'GET' && job[2]) return jobResult(env, await requireUser(env, request), job[1]);
+  if (job && request.method === 'DELETE' && !job[2]) return deleteJob(env, await requireUser(env, request), job[1]);
   throw new HttpError(404, 'Not found.');
 }
 
@@ -94,5 +103,15 @@ export default {
       console.error('unhandled', e && e.stack);
       return json({ error: 'Something went wrong on our side.' }, 500);
     }
+  },
+
+  // Background staging jobs (see jobs.js).
+  async queue(batch, env) {
+    for (const msg of batch.messages) await runJob(msg, env);
+  },
+
+  // Hourly: fail stuck jobs (with refunds) and delete stagings older than 30 days.
+  async scheduled(_event, env, ctx) {
+    ctx.waitUntil(cleanup(env));
   },
 };

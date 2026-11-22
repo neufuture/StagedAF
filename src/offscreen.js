@@ -28,29 +28,49 @@
     return res.blob();
   }
 
-  // The UnitStager server stages the photo and takes one credit.
+  // The UnitStager server stages the photo in the background and takes one
+  // credit: submit the job, wait for it to finish, then fetch the result. If
+  // this page goes away first, the staging still finishes and is kept for 30
+  // days under "Recent stagings" on unitstager.com.
   async function callServer(job, image, signal) {
-    const auth = await ask({ type: 'saf:get-auth' }, 'Sign in to UnitStager first.');
+    const call = async (path, init = {}) => {
+      const auth = await ask({ type: 'saf:get-auth' }, 'Sign in to UnitStager first.');
+      let res;
+      try {
+        res = await fetch(auth.serverUrl + path, { ...init, headers: { Authorization: 'Bearer ' + auth.token }, signal });
+      } catch {
+        if (signal.aborted) throw fail('Cancelled.', 'cancelled');
+        throw fail("Can't reach the UnitStager server. Check your connection and try again.", 'network');
+      }
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw fail((body && body.error) || `The UnitStager server returned an error (${res.status}).`, (body && body.code) || (res.status === 401 ? 'auth' : undefined));
+      return body;
+    };
     const form = new FormData();
     form.append('image', image.blob, 'photo.jpg');
+    form.append('name', String(job.name || 'photo.jpg').slice(0, 120));
     form.append('room', job.room || 'auto');
     form.append('style', job.style || 'modern');
     form.append('custom', job.custom || '');
+    form.append('label', '0'); // the extension adds its own label, from its settings
     form.append('width', String(image.width));
     form.append('height', String(image.height));
-    let res;
-    try {
-      res = await fetch(auth.serverUrl + '/api/stage', { method: 'POST', headers: { Authorization: 'Bearer ' + auth.token }, body: form, signal });
-    } catch {
-      if (signal.aborted) throw fail('Cancelled.', 'cancelled');
-      throw fail("Can't reach the UnitStager server. Check your connection and try again.", 'network');
+    const created = await call('/api/jobs', { method: 'POST', body: form });
+    for (;;) {
+      await new Promise((resolve, reject) => {
+        const t = setTimeout(resolve, 3000);
+        signal.addEventListener('abort', () => (clearTimeout(t), reject(fail('Cancelled.', 'cancelled'))), { once: true });
+      });
+      const { stagings } = await call('/api/jobs');
+      const mine = (stagings || []).find((s) => s.id === created.id);
+      if (!mine) throw fail('The staging could not be found. Check Recent stagings on unitstager.com.');
+      if (mine.status === 'error') throw fail(mine.error || 'Staging failed. Your credit was returned.', 'upstream');
+      if (mine.status === 'done') break;
     }
-    const body = await res.json().catch(() => null);
-    if (!res.ok) throw fail((body && body.error) || `The UnitStager server returned an error (${res.status}).`, (body && body.code) || (res.status === 401 ? 'auth' : undefined));
-    const item = body && body.data && body.data[0];
+    const result = await call(`/api/jobs/${created.id}/result`);
+    const item = result && result.data && result.data[0];
     if (!item || !item.b64_json) throw fail('The server returned no image.');
-    const credits = Number(res.headers.get('X-Credits'));
-    return { dataUrl: 'data:image/jpeg;base64,' + item.b64_json, credits: Number.isFinite(credits) ? credits : undefined };
+    return { dataUrl: 'data:image/jpeg;base64,' + item.b64_json, credits: typeof created.credits === 'number' ? created.credits : undefined };
   }
 
   async function run(job, signal) {

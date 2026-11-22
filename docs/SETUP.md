@@ -99,6 +99,26 @@ on the server (see "Changing prices" below).
 
 From then on, every change pushed to that branch redeploys automatically.
 
+## 5b. Photo storage and background staging
+
+Staging runs in the background and staged photos are kept for 30 days. This
+needs two things in Cloudflare. **Create both before the server update that
+adds them is deployed** — if they are missing, Cloudflare's build fails and
+the previous version stays live until they exist and you retry the deploy.
+
+1. **R2 bucket:** in the Cloudflare dashboard, **R2 Object Storage → Create
+   bucket**, named exactly `unitstager-photos`. (R2 may ask you to add a
+   payment method to switch it on; small use like this is within its free
+   allowance.)
+2. **Queue:** **Workers & Pages → Queues → Create queue**, named exactly
+   `unitstager-staging`.
+3. Optional safety net: in the bucket's **Settings → Object lifecycle rules**,
+   add a rule to delete objects after 30 days. The server already deletes
+   expired photos hourly; this catches anything it misses.
+
+Then re-run `server/supabase/schema.sql` (it adds the `stagings` table) and
+retry the deploy under the Worker's **Deployments** tab.
+
 ## 6. Try it end to end
 
 1. In the extension's settings, under **Advanced**, the **UnitStager server**

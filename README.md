@@ -51,7 +51,10 @@ prompt lives in `server/src/prompt.js`, so both can be changed without
 shipping a new extension.
 
 Photos go from the browser to the UnitStager server and on to the image
-service. The server does not store them.
+service. Staging runs in the background (a Cloudflare queue), so it finishes
+even if the page is closed; staged results are kept in Cloudflare R2 for 30
+days and listed under Recent stagings in the website studio. Uploaded
+originals are deleted as soon as staging finishes.
 
 ## Settings worth knowing
 
