@@ -23,6 +23,10 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
     stagings: new Map(),
     promos: new Map(), // code -> {credits, max, expires, users:Set}
     rates: new Map(),
+    events: [],
+    emails_sent: [], // alert emails sent through the Resend stand-in
+    turnstileGood: 'XXXX.DUMMY.TOKEN.XXXX',
+    usage: { input_tokens: 1300, input_tokens_details: { text_tokens: 300, image_tokens: 1000 }, output_tokens: 5400 },
   };
   const userFor = (email) => {
     if (!state.users.has(email)) state.users.set(email, { id: crypto.randomUUID(), email });
@@ -81,6 +85,28 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
     },
     trim_rate_events() {
       return null;
+    },
+    note_event({ p_kind, p_key }) {
+      state.events.push({ kind: p_kind, key: p_key, at: Date.now() });
+      return null;
+    },
+    recent_event({ p_kind, p_key, p_minutes }) {
+      return state.events.some((e) => e.kind === p_kind && e.key === p_key && e.at > Date.now() - p_minutes * 60000);
+    },
+    record_staging_usage({ p_id, p_input, p_output, p_cost }) {
+      const j = state.stagings.get(p_id);
+      if (j) Object.assign(j, { input_tokens: p_input, output_tokens: p_output, cost_usd: p_cost });
+      return null;
+    },
+    usage_today() {
+      const day = new Date().toISOString().slice(0, 10);
+      const today = [...state.stagings.values()].filter((j) => String(j.created_at).startsWith(day));
+      return { stagings: today.length, cost_usd: today.reduce((s, j) => s + (Number(j.cost_usd) || 0), 0) };
+    },
+    period_stats() {
+      const done = [...state.stagings.values()].filter((j) => j.status === 'done');
+      return { new_accounts: state.accounts.size, free_credits: 0, promo_credits: 0, purchases: 0, revenue_cents: 3400, stagings_done: done.length, stagings_failed: 0,
+        cost_usd: done.reduce((s, j) => s + (Number(j.cost_usd) || 0), 0), avg_cost_usd: 0.18, credits_unused: 7, limit_hits: { 'hit:code-ip': 2 } };
     },
     // ---- background stagings ----
     create_staging(a) {
@@ -214,6 +240,16 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
       if (/^\/v1\/payment_intents\/pi_/.test(p) && req.method === 'GET') {
         return send(200, { id: p.split('/').pop(), latest_charge: { receipt_url: 'https://pay.stripe.test/receipts/' + p.split('/').pop() } });
       }
+      if (p === '/emails') {
+        state.emails_sent.push({ auth: req.headers.authorization, ...JSON.parse(raw.toString()) });
+        return send(200, { id: 'email_' + state.emails_sent.length });
+      }
+      if (p === '/turnstile/v0/siteverify') {
+        const text = raw.toString('latin1');
+        const field = (name) => (new RegExp(`name="${name}"\\r\\n\\r\\n([\\s\\S]*?)\\r\\n--`).exec(text) || [])[1];
+        const ok = field('secret') === 'turnstile-secret' && field('response') === state.turnstileGood;
+        return send(200, ok ? { success: true } : { success: false, 'error-codes': ['invalid-input-response'] });
+      }
       if (p === '/v1/customers' && req.method === 'POST') {
         const params = Object.fromEntries(new URLSearchParams(raw.toString()));
         const key = req.headers['idempotency-key'];
@@ -249,7 +285,7 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
         if (call.fidelity && state.rejectFidelity) return send(400, { error: { message: "Unknown parameter: 'input_fidelity'.", param: 'input_fidelity' } });
         if (state.declineImage-- > 0) return send(400, { error: { message: 'Your request was rejected by the safety system.', code: 'moderation_blocked' } });
         if (state.failImage-- > 0) return send(500, { error: { message: 'Mock server exploded' } });
-        return setTimeout(() => send(200, { data: [{ b64_json: imageBase64 }] }), state.imageDelay);
+        return setTimeout(() => send(200, { data: [{ b64_json: imageBase64 }], usage: state.usage }), state.imageDelay);
       }
       send(404, { message: 'mock: unknown path ' + p });
     });

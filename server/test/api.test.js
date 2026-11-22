@@ -486,28 +486,125 @@ test('promo codes: redeem once for credits; bad, used-up and repeat codes are re
   assert.match((await call('/api/promo', { method: 'POST', token: c.access_token, body: { code: 'BETA25' } })).data.error, /fully used/);
 });
 
-test('abuse limits: sign-in emails, free credits per network, promo guessing', async () => {
-  // A server with the real (unscaled) limits.
-  const strict = await serve({ SUPABASE_URL: mock.url, SUPABASE_PUBLISHABLE_KEY: 'pub-key', SUPABASE_SECRET_KEY: 'secret-key', FREE_CREDITS: '10' });
+test('abuse limits: sign-in emails, free credits per network, promo guessing, with alerts', async () => {
+  // A server with real limits, tightened through the dashboard-style variables.
+  const strict = await serve({ SUPABASE_URL: mock.url, SUPABASE_PUBLISHABLE_KEY: 'pub-key', SUPABASE_SECRET_KEY: 'secret-key', FREE_CREDITS: '10',
+    LIMIT_CODES_PER_EMAIL_HOUR: '5', LIMIT_CODES_PER_IP_HOUR: '10', LIMIT_FREE_ACCOUNTS_PER_IP_MONTH: '3',
+    RESEND_API_KEY: 're_test', RESEND_BASE: mock.url, ALERT_EMAIL: 'owner@example.com' });
   const post = (path, body, ip) => fetch(strict.url + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip }, body: JSON.stringify(body) });
+  state.emails_sent.length = 0;
   try {
     for (let i = 0; i < 5; i++) assert.equal((await post('/api/auth/start', { email: 'flood@example.com' }, '198.51.100.' + i)).status, 200);
-    const r = await post('/api/auth/start', { email: 'flood@example.com' }, '198.51.100.99');
-    assert.equal(r.status, 429, 'one address can only be sent so many codes an hour');
+    assert.equal((await post('/api/auth/start', { email: 'flood@example.com' }, '198.51.100.99')).status, 429, 'one address can only be sent so many codes an hour');
+    assert.equal((await post('/api/auth/start', { email: 'flood@example.com' }, '198.51.100.98')).status, 429);
+    const alerts = state.emails_sent.filter((e) => /code emails per address/.test(e.subject));
+    assert.equal(alerts.length, 1, 'an alert email is sent, once an hour per limit, not on every hit');
+    assert.equal(alerts[0].to[0], 'owner@example.com');
+    assert.equal(alerts[0].auth, 'Bearer re_test');
+    assert.match(alerts[0].text, /LIMIT_CODES_PER_EMAIL_HOUR/, 'it says which setting to change');
+    assert.doesNotMatch(alerts[0].text, /flood@example\.com/, 'and masks the address');
     for (let i = 0; i < 10; i++) await post('/api/auth/start', { email: `x${i}@example.com` }, '203.0.113.5');
     assert.equal((await post('/api/auth/start', { email: 'x99@example.com' }, '203.0.113.5')).status, 429, 'one network can only request so many codes an hour');
 
     const signUp = async (email, ip) => (await (await post('/api/auth/verify', { email, code: '123456' }, ip)).json()).credits;
     assert.deepEqual([await signUp('farm1@example.com', '192.0.2.7'), await signUp('farm2@example.com', '192.0.2.7'), await signUp('farm3@example.com', '192.0.2.7')], [10, 10, 10]);
-    assert.equal(await signUp('farm4@example.com', '192.0.2.7'), 0, 'the 4th new account from one network gets no free credits');
+    assert.equal(await signUp('farm4@example.com', '192.0.2.7'), 0, 'past the per-network cap, new accounts get no free credits');
     assert.equal(await signUp('farm1@example.com', '192.0.2.7'), 10, 'existing accounts are unaffected');
     assert.equal(await signUp('someone@example.com', '192.0.2.8'), 10, 'other networks are unaffected');
 
     const tok = (await (await post('/api/auth/verify', { email: 'guess@example.com', code: '123456' }, '192.0.2.50')).json()).access_token;
     let last;
-    for (let i = 0; i < 21; i++) last = await fetch(strict.url + '/api/promo', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok, 'CF-Connecting-IP': '192.0.2.50' }, body: JSON.stringify({ code: 'GUESS' + i }) });
+    for (let i = 0; i < 31; i++) last = await fetch(strict.url + '/api/promo', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok, 'CF-Connecting-IP': '192.0.2.50' }, body: JSON.stringify({ code: 'GUESS' + i }) });
     assert.equal(last.status, 429, 'promo guessing is limited per network too');
   } finally {
     strict.close();
+  }
+});
+
+test('default limits are generous', async () => {
+  const open = await serve({ SUPABASE_URL: mock.url, SUPABASE_PUBLISHABLE_KEY: 'pub-key', SUPABASE_SECRET_KEY: 'secret-key', FREE_CREDITS: '10' });
+  const post = (path, body) => fetch(open.url + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '100.64.0.1' }, body: JSON.stringify(body) });
+  try {
+    const credits = [];
+    for (let i = 0; i < 10; i++) credits.push((await (await post('/api/auth/verify', { email: `office${i}@example.com`, code: '123456' })).json()).credits);
+    assert.deepEqual(credits, Array(10).fill(10), 'ten new accounts from one office network all get free credits');
+    for (let i = 0; i < 8; i++) assert.equal((await post('/api/auth/start', { email: 'retry@example.com' })).status, 200, 'resending the code a few times is fine');
+  } finally {
+    open.close();
+  }
+});
+
+test('turnstile: passed check gets free credits; missing check still signs in, without them; bad token refused', async () => {
+  const env = { SUPABASE_URL: mock.url, SUPABASE_PUBLISHABLE_KEY: 'pub-key', SUPABASE_SECRET_KEY: 'secret-key', FREE_CREDITS: '10',
+    TURNSTILE_SECRET_KEY: 'turnstile-secret', TURNSTILE_SITE_KEY: '0xSITEKEY', TURNSTILE_VERIFY_URL: mock.url + '/turnstile/v0/siteverify' };
+  const ts = await serve(env);
+  const post = (path, body, ip = '100.64.1.1') => fetch(ts.url + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip }, body: JSON.stringify(body) });
+  try {
+    assert.equal((await (await fetch(ts.url + '/api/config')).json()).turnstile_site_key, '0xSITEKEY', 'the site key is published for the sign-in form');
+    assert.equal((await post('/api/auth/start', { email: 'human@example.com', turnstile: state.turnstileGood })).status, 200);
+    assert.equal((await (await post('/api/auth/verify', { email: 'human@example.com', code: '123456' })).json()).credits, 10, 'passed the check: free credits');
+
+    assert.equal((await post('/api/auth/start', { email: 'oldext@example.com' })).status, 200, 'no token (older extension): still allowed');
+    assert.equal((await (await post('/api/auth/verify', { email: 'oldext@example.com', code: '123456' })).json()).credits, 0, '…but no free credits');
+
+    const bad = await post('/api/auth/start', { email: 'bot@example.com', turnstile: 'forged' });
+    assert.equal(bad.status, 403);
+    assert.equal((await bad.json()).code, 'captcha');
+
+    for (let i = 0; i < 10; i++) await post('/api/auth/start', { email: `nob${i}@example.com` }, '100.64.9.9');
+    assert.equal((await post('/api/auth/start', { email: 'nob99@example.com' }, '100.64.9.9')).status, 429, 'without the check, the tighter per-network limit applies');
+  } finally {
+    ts.close();
+  }
+  const req = await serve({ ...env, TURNSTILE_REQUIRED: 'true' });
+  try {
+    const r = await fetch(req.url + '/api/auth/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'x@example.com' }) });
+    assert.equal(r.status, 403, 'once required, sign-in without the check is refused');
+  } finally {
+    req.close();
+  }
+  assert.equal((await (await fetch(app.url + '/api/config')).json()).turnstile_site_key, null, 'off until the secret is set');
+});
+
+test('cost tracking, spend alert, daily cap and daily summary', async () => {
+  const env = { SUPABASE_URL: mock.url, SUPABASE_PUBLISHABLE_KEY: 'pub-key', SUPABASE_SECRET_KEY: 'secret-key', OPENAI_API_KEY: 'sk-server', OPENAI_BASE: mock.url + '/v1',
+    FREE_CREDITS: '10', RATE_LIMIT_SCALE: '1000', RESEND_API_KEY: 're_test', RESEND_BASE: mock.url, ALERT_EMAIL: 'owner@example.com', ALERT_DAILY_COST_USD: '0.1', DAILY_STAGING_CAP: '0' };
+  const srv = await serve(env);
+  state.emails_sent.length = 0;
+  try {
+    const login = async (email) => {
+      await fetch(srv.url + '/api/auth/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+      return (await (await fetch(srv.url + '/api/auth/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, code: '123456' }) })).json()).access_token;
+    };
+    const tok = await login('costs@example.com');
+    const form = photo();
+    const r = await (await fetch(srv.url + '/api/jobs', { method: 'POST', headers: { Authorization: 'Bearer ' + tok }, body: form })).json();
+    await waitFor(async () => state.stagings.get(r.id) && state.stagings.get(r.id).cost_usd != null);
+    const j = state.stagings.get(r.id);
+    assert.equal(j.output_tokens, 5400);
+    assert.equal(j.cost_usd, Math.round(((300 * 5 + 1000 * 8 + 5400 * 30) / 1e6) * 10000) / 10000, 'cost worked out from the reported tokens');
+    await waitFor(async () => state.emails_sent.some((e) => /Image spend today passed \$0.1/.test(e.subject)));
+    assert.ok(true, 'spend over the daily threshold raises an alert');
+  } finally {
+    srv.close();
+  }
+  const capped = await serve({ ...env, DAILY_STAGING_CAP: '1' });
+  try {
+    const email = 'capped@example.com';
+    await fetch(capped.url + '/api/auth/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+    const tok = (await (await fetch(capped.url + '/api/auth/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, code: '123456' }) })).json()).access_token;
+    const res = await fetch(capped.url + '/api/jobs', { method: 'POST', headers: { Authorization: 'Bearer ' + tok }, body: photo() });
+    assert.equal(res.status, 503, 'past the optional daily cap, new stagings are turned away');
+    assert.ok(state.emails_sent.some((e) => /Daily staging cap reached/.test(e.subject)), 'and you are told');
+    state.emails_sent.length = 0;
+    await capped.cron('7 15 * * *');
+    await capped.idle();
+    const daily = state.emails_sent.find((e) => /Daily summary/.test(e.subject));
+    assert.ok(daily, 'the daily cron sends the summary');
+    assert.match(daily.text, /Sign-ups:/);
+    assert.match(daily.text, /Revenue: +\$34\.00/);
+    assert.match(daily.text, /code-ip: 2/);
+  } finally {
+    capped.close();
   }
 });

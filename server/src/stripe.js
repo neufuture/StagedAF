@@ -1,6 +1,7 @@
 // Stripe: selling credit packs through Checkout, and the webhook that adds
 // the credits once a payment has gone through.
 import { HttpError, json, requireEnv } from './http.js';
+import { alert } from './alerts.js';
 import { addCredits, claimAutoTopup, getAccount, listPurchases, notePayment, setAutoTopup, setStripeCustomer } from './supabase.js';
 
 // Credit packs. `amount` is in cents. Override with the PACKS variable (JSON, same shape).
@@ -123,7 +124,11 @@ export async function maybeAutoTopUp(env, user, credits) {
     if (!(credits <= AUTO_THRESHOLD) || !env.STRIPE_SECRET_KEY) return;
     const claim = await claimAutoTopup(env, user.id, AUTO_THRESHOLD, AUTO_MIN_SECONDS);
     if (!claim) return;
-    const off = (why) => (console.error('auto top-up turned off:', why, user.id), setAutoTopup(env, user.id, null));
+    const off = async (why) => {
+      console.error('auto top-up turned off:', why, user.id);
+      await setAutoTopup(env, user.id, null);
+      await alert(env, 'autotopup-off', 'An auto top-up was declined', `Auto top-up was switched off for ${user.email || user.id} (${why}). They can buy credits again normally.\n\nAt most one of these per hour.`);
+    };
     const pack = packs(env).find((p) => p.id === claim.pack);
     if (!pack) return await off('pack no longer exists');
 

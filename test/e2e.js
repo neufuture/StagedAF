@@ -22,6 +22,7 @@ const assert = (cond, msg) => {
     SUPABASE_URL: mock.url, SUPABASE_PUBLISHABLE_KEY: 'pub-key', SUPABASE_SECRET_KEY: 'secret-key',
     OPENAI_API_KEY: 'sk-server', OPENAI_BASE: mock.url + '/v1', STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_BASE: mock.url,
     STRIPE_WEBHOOK_SECRET: 'whsec_test', SITE_URL: 'https://unitstager.com', FREE_CREDITS: '2',
+    TURNSTILE_SECRET_KEY: 'turnstile-secret', TURNSTILE_SITE_KEY: '1x00000000000000000000AA', TURNSTILE_VERIFY_URL: mock.url + '/turnstile/v0/siteverify',
   });
   const post = (path, body) => fetch(app.url + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
   // A signed-in account with plenty of credits for the AppFolio flows.
@@ -37,6 +38,7 @@ const assert = (cond, msg) => {
     args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
   });
   try {
+    await ctx.route('https://challenges.cloudflare.com/turnstile/v0/api.js*', (r) => r.fulfill({ contentType: 'text/javascript', body: fs.readFileSync(path.join(__dirname, '..', 'server', 'test', 'fake-turnstile.js')) }));
     await ctx.route('https://demo.appfolio.com/**', (route) => {
       const p = new URL(route.request().url()).pathname;
       if (/\.(jpg|png)$/.test(p)) return route.fulfill({ contentType: 'image/jpeg', body: fx(p.startsWith('/images/up') ? 'staged.jpg' : 'empty.jpg') });
@@ -147,6 +149,7 @@ const assert = (cond, msg) => {
       await opts.locator('#sendCode').click();
       await opts.locator('#code').waitFor();
       assert(mock.state.emails.at(-1) === 'pm@example.com', 'sign-in code emailed');
+      assert(/\/verify\.html$/.test((await opts.locator('#verifyFrame').getAttribute('src')) || '') && (await opts.locator('#verifyFrame').getAttribute('hidden')) === null, 'the extension loads the (normally invisible) security check from the website');
       await opts.locator('#code').fill('000000');
       await opts.locator('#verify').click();
       await opts.locator('#authResult.bad', { hasText: 'wrong or has expired' }).waitFor();
@@ -156,6 +159,7 @@ const assert = (cond, msg) => {
       await opts.locator('#signedIn').waitFor();
       await opts.locator('#packs button').first().waitFor();
       assert((await opts.locator('#credits').textContent()) === '2' && (await opts.locator('#who').textContent()) === 'pm@example.com', 'signed in with 2 free credits');
+      assert(mock.state.events.some((e) => e.kind === 'human' && e.key === 'pm@example.com'), 'the Turnstile check passed inside the extension (that is what earned the free credits)');
       mock.state.promos.set('TESTER3', { credits: 3, users: new Set() });
       await opts.locator('#promoCode').fill('tester3');
       await opts.locator('#promoApply').click();

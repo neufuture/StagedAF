@@ -5,6 +5,7 @@
 //   POST /api/auth/refresh   {refresh_token}         -> session
 //   GET  /api/me                                     -> email, credits, packs
 //   GET  /api/packs                                  -> packs (public, for the website)
+//   GET  /api/config                                 -> public settings (Turnstile site key)
 //   POST /api/stage          multipart photo         -> staged photo (costs 1 credit)
 //   POST /api/checkout       {pack, auto?, from?}    -> Stripe Checkout URL
 //   POST /api/auto-topup     {enabled:false}         turn auto top-up off
@@ -18,23 +19,30 @@
 // Everything else is the static website in ./public.
 import { CORS, HttpError, json, readJson } from './http.js';
 import { cleanup, createJob, deleteJob, jobResult, listJobs, runJob } from './jobs.js';
+import { dailySummary } from './alerts.js';
 import { allow, clientIp, enforce } from './limits.js';
+import { checkTurnstile, turnstileOn } from './turnstile.js';
 import { stage } from './stage.js';
 import { AUTO_THRESHOLD, billingPortal, createCheckout, publicPacks, purchases, receipt, webhook } from './stripe.js';
 import { ensureAccount, getAccount, refreshSession, requireUser, rpc, sendCode, setAutoTopup, verifyCode } from './supabase.js';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const DAILY_CRON = '7 15 * * *'; // daily summary email, 15:07 UTC (about 7am Pacific)
 
 async function api(request, env, path, ctx) {
   const route = request.method + ' ' + path;
   switch (route) {
     case 'POST /api/auth/start': {
-      const email = String((await readJson(request)).email || '').trim().toLowerCase();
+      const body = await readJson(request);
+      const email = String(body.email || '').trim().toLowerCase();
       if (!EMAIL.test(email) || email.length > 254) throw new HttpError(400, 'Enter a valid email address.');
+      const ip = clientIp(request);
+      const human = await checkTurnstile(env, body.turnstile, ip);
       const busy = 'Too many sign-in emails. Wait a while and try again.';
-      await enforce(env, 'code-ip', clientIp(request), busy);
+      await enforce(env, human || !turnstileOn(env) ? 'code-ip' : 'code-ip-unverified', ip, busy);
       await enforce(env, 'code-email', email, busy);
       await sendCode(env, email);
+      if (human) await rpc(env, 'note_event', { p_kind: 'human', p_key: email }).catch(() => {});
       return json({ ok: true });
     }
     case 'POST /api/auth/verify': {
@@ -46,8 +54,13 @@ async function api(request, env, path, ctx) {
       const session = await verifyCode(env, email, code);
       // Free credits go to at most a few new accounts per network, so they
       // can't be farmed with throwaway email addresses.
+      // With Turnstile on, free credits also need a passed check for this address.
       const isNew = !(await getAccount(env, session.user.id).catch(() => null));
-      const free = isNew && !(await allow(env, 'free-ip', clientIp(request))) ? 0 : undefined;
+      let free;
+      if (isNew) {
+        const human = !turnstileOn(env) || (await rpc(env, 'recent_event', { p_kind: 'human', p_key: email, p_minutes: 120 }).catch(() => false));
+        if (!human || !(await allow(env, 'free-ip', clientIp(request)))) free = 0;
+      }
       const credits = await ensureAccount(env, session.user, free);
       return json({ ...session, credits });
     }
@@ -63,6 +76,8 @@ async function api(request, env, path, ctx) {
       const account = (await getAccount(env, user.id).catch(() => null)) || {};
       return json({ email: user.email, credits, packs: publicPacks(env), auto: { pack: account.auto_pack || null, threshold: AUTO_THRESHOLD }, has_billing: !!account.has_card });
     }
+    case 'GET /api/config':
+      return json({ turnstile_site_key: (turnstileOn(env) && env.TURNSTILE_SITE_KEY) || null });
     case 'GET /api/packs':
       return json({ packs: publicPacks(env), free_credits: Number(env.FREE_CREDITS ?? 10) || 0, auto_threshold: AUTO_THRESHOLD });
     case 'POST /api/stage':
@@ -138,7 +153,8 @@ export default {
   },
 
   // Hourly: fail stuck jobs (with refunds) and delete stagings older than 30 days.
-  async scheduled(_event, env, ctx) {
-    ctx.waitUntil(cleanup(env));
+  async scheduled(event, env, ctx) {
+    if (event.cron === DAILY_CRON) ctx.waitUntil(dailySummary(env));
+    else ctx.waitUntil(cleanup(env));
   },
 };

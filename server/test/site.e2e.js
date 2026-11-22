@@ -25,10 +25,12 @@ const app = await serve({
   SUPABASE_URL: mock.url, SUPABASE_PUBLISHABLE_KEY: 'pub-key', SUPABASE_SECRET_KEY: 'secret-key',
   OPENAI_API_KEY: 'sk-server', OPENAI_BASE: mock.url + '/v1', STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_BASE: mock.url,
   STRIPE_WEBHOOK_SECRET: 'whsec_test', SITE_URL: 'http://SITE', FREE_CREDITS: '2',
+  TURNSTILE_SECRET_KEY: 'turnstile-secret', TURNSTILE_SITE_KEY: '1x00000000000000000000AA', TURNSTILE_VERIFY_URL: mock.url + '/turnstile/v0/siteverify',
 });
 const site = app.url;
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+await ctx.route('https://challenges.cloudflare.com/turnstile/v0/api.js*', (r) => r.fulfill({ contentType: 'text/javascript', body: fs.readFileSync(path.join(here, 'fake-turnstile.js')) }));
 await ctx.route('https://checkout.stripe.test/**', (r) => r.fulfill({ contentType: 'text/html', body: 'mock checkout' }));
 await ctx.route('https://billing.stripe.test/**', (r) => r.fulfill({ contentType: 'text/html', body: 'mock portal' }));
 await ctx.route('https://pay.stripe.test/**', (r) => r.fulfill({ contentType: 'text/html', body: 'mock receipt' }));
@@ -69,6 +71,7 @@ try {
   await page.locator('#studio').waitFor();
   await page.locator('#credits', { hasText: '2 credits' }).waitFor();
   assert(true, 'wrong code refused; right code goes straight to the studio with 2 free credits');
+  assert(mock.state.events.some((e) => e.kind === 'human' && e.key === 'newpm@example.com'), 'the Turnstile check ran on sign-up and passed (that is what earned the free credits)');
 
   console.log('Studio');
   await page.locator('#files').setInputFiles([photo('kitchen.jpg'), photo('bedroom.jpg'), photo('living.jpg'), path.join(here, 'api.test.js')]);

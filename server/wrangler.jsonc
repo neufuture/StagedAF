@@ -20,8 +20,12 @@
     "producers": [{ "binding": "STAGING_QUEUE", "queue": "unitstager-staging" }],
     "consumers": [{ "queue": "unitstager-staging", "max_batch_size": 1, "max_retries": 3 }]
   },
-  // Hourly cleanup: stuck jobs are refunded, stagings older than 30 days deleted.
-  "triggers": { "crons": ["17 * * * *"] },
+  // Hourly cleanup (stuck jobs refunded, stagings older than 30 days deleted),
+  // and the daily summary email at 15:07 UTC.
+  "triggers": { "crons": ["17 * * * *", "7 15 * * *"] },
+  // Keep variables added in the Cloudflare dashboard (limits, alert settings)
+  // when deploying, instead of resetting them to only what's listed here.
+  "keep_vars": true,
   "vars": {
     "SITE_URL": "https://unitstager.com",
     "OPENAI_MODEL": "gpt-image-2",

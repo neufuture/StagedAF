@@ -16,6 +16,7 @@
     <div id="signedOut">
       <p class="hint">Sign in with your email. New accounts include free staged photos — no card needed.</p>
       <div class="actions"><input id="email" type="email" autocomplete="email" placeholder="you@company.com" aria-label="Email address"><button id="sendCode" type="button">Email me a sign-in code</button></div>
+      <iframe id="verifyFrame" title="Security check" hidden></iframe>
       <div class="actions" id="codeRow" hidden><input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="Code from the email" aria-label="Sign-in code"><button id="verify" type="button">Sign in</button></div>
     </div>
     <div id="signedIn" hidden>

@@ -203,3 +203,5 @@ nav a.nav-cta { color: var(--accent); font-weight: 700; }
 #promoForm input:not(:placeholder-shown) { text-transform: uppercase; }
 .signin .legal { font-size: 13px; margin: 14px 0 0; }
 .signin .legal a { color: inherit; }
+.signin .ts:empty { display: none; }
+.signin .ts { margin-top: 12px; }

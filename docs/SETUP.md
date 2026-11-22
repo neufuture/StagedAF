@@ -156,8 +156,8 @@ under `vars`. Free sign-up credits are `FREE_CREDITS`. The packs default to
 "PACKS": "[{\"id\":\"pack25\",\"name\":\"25 staged photos\",\"credits\":25,\"amount\":1900},{\"id\":\"pack50\",\"name\":\"50 staged photos\",\"credits\":50,\"amount\":3400},{\"id\":\"pack100\",\"name\":\"100 staged photos\",\"credits\":100,\"amount\":5900}]"
 ```
 
-**After a server update that changes the database.** (Most recently: abuse
-limits.) Run
+**After a server update that changes the database.** (Most recently: cost
+tracking and alerts.) Run
 `server/supabase/schema.sql` again in the Supabase SQL Editor. It is written
 to be run repeatedly and never removes data.
 
@@ -190,10 +190,41 @@ Content-Security-Policy and other security headers. If you add a third-party
 script (for example the Featurebase chat widget), its domains must be added to
 the policy there, or the browser will block it.
 
-**Abuse limits.** The server limits sign-in code emails (per network and per
-address), sign-in attempts, and promo-code attempts, and gives free sign-up
-credits to at most 3 new accounts per network per 30 days. The numbers are in
-`server/src/limits.js`.
+**Limits, alerts and Turnstile.** All of these are set with variables in
+Cloudflare: Worker → **Settings → Variables and Secrets** → **Add**. Plain
+settings use type *Text*; keys use type *Secret*. They are kept when the
+server redeploys.
+
+| Variable | Type | Default | What it does |
+|---|---|---|---|
+| `TURNSTILE_SITE_KEY` | Text | — | Turns on the sign-up security check (with the secret below) |
+| `TURNSTILE_SECRET_KEY` | Secret | — | |
+| `TURNSTILE_REQUIRED` | Text | off | `true` refuses sign-in without the check. Leave off until everyone has an extension version with it (1.2.0+) |
+| `RESEND_API_KEY` | Secret | — | Sends alert and daily-summary emails (a Resend key with sending access) |
+| `ALERT_EMAIL` | Text | — | Where alerts go, e.g. `hello@unitstager.com` (comma-separate several) |
+| `ALERT_DAILY_COST_USD` | Text | 25 | Email when estimated image spend in a day passes this |
+| `DAILY_STAGING_CAP` | Text | off | Stop new stagings after this many in a day (safety valve) |
+| `FREE_CREDITS` | (in wrangler.jsonc) | 10 | Free credits per new account |
+| `LIMIT_FREE_ACCOUNTS_PER_IP_MONTH` | Text | 10 | New accounts given free credits per network per 30 days |
+| `LIMIT_CODES_PER_IP_HOUR` | Text | 30 | Sign-in code emails per network per hour (check passed) |
+| `LIMIT_CODES_PER_IP_HOUR_UNVERIFIED` | Text | 10 | …without the check |
+| `LIMIT_CODES_PER_EMAIL_HOUR` | Text | 8 | Sign-in code emails per address per hour |
+| `LIMIT_SIGNINS_PER_IP_HOUR` | Text | 60 | Sign-in attempts per network per hour |
+| `LIMIT_PROMO_PER_IP_HOUR` | Text | 30 | Promo-code attempts per network per hour |
+| `PRICE_IMAGE_OUTPUT_PER_M` etc. | Text | 30 / 8 / 5 | Token prices used for cost estimates (see docs/COSTS.md) |
+
+**Setting up Turnstile:** in Cloudflare go to **Turnstile → Add widget**,
+name it UnitStager, add hostname `unitstager.com`, choose **Managed** mode,
+and create it. Copy the **site key** into `TURNSTILE_SITE_KEY` and the
+**secret key** into `TURNSTILE_SECRET_KEY`.
+
+**Alerts** arrive at most once an hour per kind (once a day for spend and the
+daily cap): a limit was reached, stagings are failing, an auto top-up was
+declined, spend passed the threshold. A **daily summary** is emailed at 15:07
+UTC (about 7am Pacific). Without `RESEND_API_KEY` and `ALERT_EMAIL`, these only
+appear in the Worker's logs.
+
+Costs and margins: see [`COSTS.md`](COSTS.md).
 
 **Promo codes (free credits for testers).** Create codes in Supabase:
 **Table Editor → promo_codes → Insert row**.

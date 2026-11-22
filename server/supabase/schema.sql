@@ -389,5 +389,66 @@ revoke all on function public.trim_rate_events() from public, anon, authenticate
 grant execute on function public.rate_hit(text, text, integer, integer) to service_role;
 grant execute on function public.trim_rate_events() to service_role;
 
+-- ---------------------------------------------------------------------------
+-- Observability: what each staging cost, notable events, and daily totals.
+
+alter table public.stagings add column if not exists input_tokens integer;
+alter table public.stagings add column if not exists output_tokens integer;
+alter table public.stagings add column if not exists cost_usd numeric(10, 4);
+
+-- Record what OpenAI reported for a finished staging, and its estimated cost.
+create or replace function public.record_staging_usage(p_id uuid, p_input integer, p_output integer, p_cost numeric)
+returns void language sql security definer set search_path = public as $$
+  update stagings set input_tokens = p_input, output_tokens = p_output, cost_usd = p_cost where id = p_id;
+$$;
+
+-- Note something worth counting in the daily summary (limit hit, sign-up check passed...).
+create or replace function public.note_event(p_kind text, p_key text)
+returns void language sql security definer set search_path = public as $$
+  insert into rate_events (kind, key) values (p_kind, left(coalesce(p_key, ''), 200));
+$$;
+
+-- Has this event happened for this key within p_minutes?
+create or replace function public.recent_event(p_kind text, p_key text, p_minutes integer)
+returns boolean language sql security definer set search_path = public as $$
+  select exists (select 1 from rate_events where kind = p_kind and key = p_key and at > now() - make_interval(mins => p_minutes));
+$$;
+
+-- Stagings and estimated image cost since midnight UTC.
+create or replace function public.usage_today()
+returns json language sql security definer set search_path = public as $$
+  select json_build_object('stagings', count(*), 'cost_usd', coalesce(sum(cost_usd), 0))
+  from stagings where created_at >= date_trunc('day', now() at time zone 'utc') at time zone 'utc';
+$$;
+
+-- Totals for the last p_hours, for the daily summary email.
+create or replace function public.period_stats(p_hours integer)
+returns json language sql security definer set search_path = public as $$
+  with since as (select now() - make_interval(hours => p_hours) as t)
+  select json_build_object(
+    'new_accounts',      (select count(*) from accounts, since where created_at > since.t),
+    'free_credits',      (select coalesce(sum(delta), 0) from credit_ledger, since where reason = 'signup' and created_at > since.t),
+    'promo_credits',     (select coalesce(sum(delta), 0) from credit_ledger, since where reason = 'promo' and created_at > since.t),
+    'purchases',         (select count(*) from credit_ledger, since where reason in ('purchase', 'auto-topup') and created_at > since.t),
+    'revenue_cents',     (select coalesce(sum(amount_cents), 0) from credit_ledger, since where reason in ('purchase', 'auto-topup') and created_at > since.t),
+    'stagings_done',     (select count(*) from stagings, since where status = 'done' and created_at > since.t),
+    'stagings_failed',   (select count(*) from stagings, since where status = 'error' and created_at > since.t),
+    'cost_usd',          (select coalesce(sum(cost_usd), 0) from stagings, since where created_at > since.t),
+    'avg_cost_usd',      (select round(avg(cost_usd), 4) from stagings, since where cost_usd is not null and created_at > since.t),
+    'credits_unused',    (select coalesce(sum(credits), 0) from accounts),
+    'limit_hits',        (select coalesce(json_object_agg(kind, n), '{}'::json) from (select kind, count(*) n from rate_events, since where kind like 'hit:%' and at > since.t group by kind) h)
+  );
+$$;
+
+do $$
+declare f text;
+begin
+  foreach f in array array['record_staging_usage(uuid, integer, integer, numeric)', 'note_event(text, text)', 'recent_event(text, text, integer)',
+    'usage_today()', 'period_stats(integer)'] loop
+    execute format('revoke all on function public.%s from public, anon, authenticated', f);
+    execute format('grant execute on function public.%s to service_role', f);
+  end loop;
+end $$;
+
 -- Tell the Supabase API to pick up new tables and functions straight away.
 notify pgrst, 'reload schema';

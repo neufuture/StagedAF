@@ -11,6 +11,7 @@
           <input id="siEmail" type="email" autocomplete="email" placeholder="you@company.com" required>
           <button class="btn primary" type="submit">Email me a code</button>
         </form>
+        <div class="ts" id="siTs"></div>
         <form id="codeForm" class="row-form" hidden>
           <label class="sr" for="siCode">Code from the email</label>
           <input id="siCode" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="Code from the email" required>
@@ -32,12 +33,15 @@
       $('siMsg').textContent = t;
     };
     const busy = (form, on) => form.querySelectorAll('button,input').forEach((el) => (el.disabled = on));
+    const check = window.US_TURNSTILE ? US_TURNSTILE.mount($('siTs')) : Promise.resolve({ token: async () => '', reset() {} });
     $('emailForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       busy($('emailForm'), true);
       say('Sending…');
       try {
-        await US.start($('siEmail').value.trim());
+        const ts = await check;
+        await US.start($('siEmail').value.trim(), await ts.token());
+        ts.reset();
         $('codeForm').hidden = false;
         $('siCode').focus();
         say(`We emailed a code to ${$('siEmail').value.trim()}. It can take a minute; check spam too.`);

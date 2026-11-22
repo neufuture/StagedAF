@@ -11,14 +11,35 @@ const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg' };
 
 // Minimal stand-in for Cloudflare's static asset binding.
+// The same _headers rules Cloudflare applies: path sections, "Name: value"
+// lines to set, and "! Name" lines to drop a header set by an earlier rule.
 const headerRules = (() => {
   try {
-    const lines = fs.readFileSync(path.join(publicDir, '_headers'), 'utf8').split('\n').filter((l) => l.trim() && !l.trim().startsWith('#'));
-    return Object.fromEntries(lines.filter((l) => /^\s/.test(l)).map((l) => l.trim().split(/:\s*(.*)/s).slice(0, 2)));
+    const rules = [];
+    for (const line of fs.readFileSync(path.join(publicDir, '_headers'), 'utf8').split('\n')) {
+      if (!line.trim() || line.trim().startsWith('#')) continue;
+      if (!/^\s/.test(line)) rules.push({ pattern: line.trim(), set: {}, drop: [] });
+      else if (line.trim().startsWith('!')) rules.at(-1).drop.push(line.trim().slice(1).trim().toLowerCase());
+      else {
+        const [k, v] = line.trim().split(/:\s*(.*)/s);
+        rules.at(-1).set[k] = v;
+      }
+    }
+    return rules;
   } catch {
-    return {};
+    return [];
   }
 })();
+const headersFor = (p) => {
+  const out = {};
+  for (const r of headerRules) {
+    const re = new RegExp('^' + r.pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+    if (!re.test(p)) continue;
+    for (const d of r.drop) for (const k of Object.keys(out)) if (k.toLowerCase() === d) delete out[k];
+    Object.assign(out, r.set);
+  }
+  return out;
+};
 const ASSETS = {
   async fetch(request) {
     let p = decodeURIComponent(new URL(request.url).pathname);
@@ -28,7 +49,7 @@ const ASSETS = {
     if (!fs.existsSync(file) && fs.existsSync(file + '.html')) file += '.html';
     if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) return new Response('Not found', { status: 404 });
     if (path.basename(file) === '_headers') return new Response('Not found', { status: 404 });
-    return new Response(fs.readFileSync(file), { headers: { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', ...headerRules } });
+    return new Response(fs.readFileSync(file), { headers: { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', ...headersFor(new URL(request.url).pathname) } });
   },
 };
 
@@ -109,7 +130,7 @@ export async function serve(env, port = 0) {
     idle,
     photos: PHOTOS,
     queue: STAGING_QUEUE,
-    cron: () => worker.scheduled({ cron: 'test', scheduledTime: Date.now() }, fullEnv(), ctx),
+    cron: (cron = 'test') => worker.scheduled({ cron, scheduledTime: Date.now() }, fullEnv(), ctx),
   };
 }
 

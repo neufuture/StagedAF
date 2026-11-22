@@ -123,6 +123,7 @@ server/supabase/schema.sql  accounts and credits tables
 docs/SETUP.md             how to deploy the server
 docs/STORE_LISTING.md     publishing to the Chrome and Edge stores
 docs/IDEAS.md             ideas saved for later
+docs/COSTS.md             cost per photo, margins per pack, fixed costs
 brand/                    logo files: icon alone, and with the name (light, dark, white, stacked)
 scripts/package.sh        builds the store upload package into dist/
 ```

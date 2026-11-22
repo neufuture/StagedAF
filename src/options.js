@@ -175,11 +175,46 @@
     }
   });
 
+  // Cloudflare Turnstile runs in a small page from the UnitStager website shown
+  // in a frame here (extensions can't load Cloudflare's script themselves).
+  const verify = { token: '', origin: '', waiters: [] };
+  async function setUpVerify() {
+    const s = SAF.merge(await chrome.storage.local.get(null));
+    if (s.session) return;
+    const base = String(s.serverUrl || SAF.DEFAULTS.serverUrl).replace(/\/+$/, '');
+    try {
+      const cfg = await (await fetch(base + '/api/config')).json();
+      if (!cfg.turnstile_site_key) return;
+    } catch {
+      return;
+    }
+    verify.origin = new URL(base).origin;
+    $('verifyFrame').src = base + '/verify.html';
+    $('verifyFrame').hidden = false;
+  }
+  addEventListener('message', (e) => {
+    if (e.origin !== verify.origin || !e.data || e.data.source !== 'unitstager-verify') return;
+    if (e.data.type === 'size') $('verifyFrame').style.height = Math.max(0, Math.min(140, Number(e.data.height) || 0)) + 'px';
+    if (e.data.type === 'token') {
+      verify.token = e.data.token || '';
+      verify.waiters.splice(0).forEach((w) => w(verify.token));
+    }
+  });
+  const verifyToken = (ms = 8000) =>
+    verify.token || !verify.origin ? Promise.resolve(verify.token) : new Promise((resolve) => (verify.waiters.push(resolve), setTimeout(() => resolve(verify.token), ms)));
+  const resetVerify = () => {
+    verify.token = '';
+    if (verify.origin) $('verifyFrame').contentWindow.postMessage({ type: 'reset' }, verify.origin);
+  };
+  setUpVerify();
+
   $('sendCode').addEventListener('click', async () => {
     const email = $('email').value.trim();
     say('Sending…');
     try {
-      await account('start', { email });
+      const turnstile = await verifyToken();
+      await account('start', { email, turnstile });
+      resetVerify();
       $('codeRow').hidden = false;
       $('code').focus();
       say(`We emailed a code to ${email}. It can take a minute; check spam too.`);

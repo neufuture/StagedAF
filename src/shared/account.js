@@ -58,8 +58,8 @@
 
   SAF.account = {
     auth,
-    async start({ email }) {
-      await request(await settings(), '/api/auth/start', { method: 'POST', body: { email } });
+    async start({ email, turnstile }) {
+      await request(await settings(), '/api/auth/start', { method: 'POST', body: { email, turnstile: turnstile || undefined } });
       return true;
     },
     async verify({ email, code }) {

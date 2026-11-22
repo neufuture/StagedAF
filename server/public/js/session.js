@@ -96,8 +96,8 @@
     },
     session: read,
     signedIn: () => !!read(),
-    async start(email) {
-      await request('/api/auth/start', { method: 'POST', body: { email } });
+    async start(email, turnstile) {
+      await request('/api/auth/start', { method: 'POST', body: { email, turnstile: turnstile || undefined } });
     },
     async verify(email, code) {
       const { data } = await request('/api/auth/verify', { method: 'POST', body: { email, code } });
