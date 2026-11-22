@@ -369,6 +369,17 @@ const waitFor = async (fn, ms = 8000) => {
 };
 const jobsOf = async (token) => (await call('/api/jobs', { token })).data.stagings;
 
+test('jobs: the AppFolio property and unit are recorded with the credit spent', async () => {
+  const s = await signIn('places@example.com');
+  const r = await jobCall(s.access_token, { property_id: '953', property: 'Lincoln Townhomes', unit_id: '2892', unit: '4919 NE 2nd Court' });
+  assert.equal(r.status, 202);
+  const row = state.ledger.find((l) => l.ref === 'stage:' + r.data.id);
+  assert.deepEqual([row.property_id, row.property_name, row.unit_id, row.unit_name], ['953', 'Lincoln Townhomes', '2892', '4919 NE 2nd Court']);
+  const bare = await jobCall(s.access_token, { property_id: '9<5>3' });
+  const row2 = state.ledger.find((l) => l.ref === 'stage:' + bare.data.id);
+  assert.deepEqual([row2.property_id, row2.property_name, row2.unit_id], ['953', null, null], 'website stagings send nothing; ids are cleaned');
+});
+
 test('jobs: staging finishes on the server and the result is kept for download', async () => {
   const s = await signIn('jobs@example.com'); // 2 credits
   const r = await jobCall(s.access_token);

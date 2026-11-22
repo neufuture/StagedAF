@@ -46,6 +46,7 @@ export async function createJob(request, env, user, ctx) {
   try {
     credits = await rpc(env, 'create_staging', {
       p_user: user.id, p_id: id, p_name: up.name, p_room: up.room, p_style: up.style, p_custom: up.custom, p_width: up.width, p_height: up.height, p_label: up.label,
+      p_property_id: up.place.property_id, p_property: up.place.property, p_unit_id: up.place.unit_id, p_unit: up.place.unit,
     });
   } catch (e) {
     await env.PHOTOS.delete(keyIn(user.id, id)).catch(() => {});

@@ -179,14 +179,27 @@ alter table public.stagings enable row level security;
 
 -- Take one credit and record the staging, together. Returns the new balance,
 -- or -1 if there were no credits (and nothing is recorded).
+-- Which AppFolio property / unit each credit was spent on (sent by the
+-- extension; empty for the website). Kept on the ledger, which is never
+-- purged, so usage can later be totalled per property.
+alter table public.credit_ledger add column if not exists property_id   text;
+alter table public.credit_ledger add column if not exists property_name text;
+alter table public.credit_ledger add column if not exists unit_id       text;
+alter table public.credit_ledger add column if not exists unit_name     text;
+create index if not exists credit_ledger_property_idx on public.credit_ledger (user_id, property_id) where property_id is not null;
+
+drop function if exists public.create_staging(uuid, uuid, text, text, text, text, integer, integer, boolean);
 create or replace function public.create_staging(p_user uuid, p_id uuid, p_name text, p_room text, p_style text, p_custom text,
-                                                 p_width integer, p_height integer, p_label boolean)
+                                                 p_width integer, p_height integer, p_label boolean,
+                                                 p_property_id text default null, p_property text default null,
+                                                 p_unit_id text default null, p_unit text default null)
 returns integer language plpgsql security definer set search_path = public as $$
 declare v integer;
 begin
   update accounts set credits = credits - 1 where user_id = p_user and credits > 0 returning credits into v;
   if not found then return -1; end if;
-  insert into credit_ledger (user_id, delta, reason, ref) values (p_user, -1, 'stage', 'stage:' || p_id);
+  insert into credit_ledger (user_id, delta, reason, ref, property_id, property_name, unit_id, unit_name)
+    values (p_user, -1, 'stage', 'stage:' || p_id, p_property_id, p_property, p_unit_id, p_unit);
   insert into stagings (id, user_id, name, room, style, custom, width, height, label)
     values (p_id, p_user, p_name, p_room, p_style, p_custom, p_width, p_height, coalesce(p_label, false));
   return v;
@@ -214,7 +227,10 @@ begin
   returning user_id into u;
   if u is null then return false; end if;
   if not p_ok then
-    insert into credit_ledger (user_id, delta, reason, ref) values (u, 1, 'refund', 'refund:' || p_id) on conflict (ref) do nothing;
+    insert into credit_ledger (user_id, delta, reason, ref, property_id, property_name, unit_id, unit_name)
+      select u, 1, 'refund', 'refund:' || p_id, l.property_id, l.property_name, l.unit_id, l.unit_name
+      from (select 1) one left join credit_ledger l on l.ref = 'stage:' || p_id
+      on conflict (ref) do nothing;
     if found then update accounts set credits = credits + 1 where user_id = u; end if;
   end if;
   return true;
@@ -267,7 +283,7 @@ end $$;
 do $$
 declare f text;
 begin
-  foreach f in array array['create_staging(uuid, uuid, text, text, text, text, integer, integer, boolean)', 'start_staging(uuid)',
+  foreach f in array array['create_staging(uuid, uuid, text, text, text, text, integer, integer, boolean, text, text, text, text)', 'start_staging(uuid)',
     'finish_staging(uuid, boolean, text)', 'list_stagings(uuid, integer)', 'staging_status(uuid, uuid)', 'delete_staging(uuid, uuid)',
     'purge_stagings(integer)', 'fail_stale_stagings(integer)'] loop
     execute format('revoke all on function public.%s from public, anon, authenticated', f);

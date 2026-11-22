@@ -21,6 +21,23 @@
     }
   };
 
+  // Which property and unit this page is for, recorded with each credit spent
+  // so usage can later be totalled per property. AppFolio's URLs look like
+  // /properties/953/units/2892 and its titles like
+  // "4919 NE 2nd Court - Lincoln Townhomes - AppFolio Property Manager".
+  A.place = () => {
+    const m = location.pathname.match(/\/properties\/(\d+)(?:\/units\/(\d+))?/i);
+    if (!m) return null;
+    const parts = String(document.title || '').split(/\s+-\s+/).map((t) => t.trim()).filter(Boolean);
+    if (parts.length && /appfolio/i.test(parts[parts.length - 1])) parts.pop();
+    const place = { propertyId: m[1], unitId: m[2] || '', property: '', unit: '' };
+    if (m[2] && parts.length >= 2) {
+      place.property = parts[parts.length - 1];
+      place.unit = parts.slice(0, -1).join(' - ');
+    } else if (parts.length) place[m[2] ? 'unit' : 'property'] = parts.join(' - ');
+    return place;
+  };
+
   // AppFolio's Photos card, as rendered on unit / property pages.
   const AF = {
     section: '.js-attached-photos',

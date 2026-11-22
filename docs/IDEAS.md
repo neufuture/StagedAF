@@ -18,3 +18,17 @@ In the website studio (and the extension), save a named combination of style,
 room defaults and instructions — e.g. "Luxury units: transitional, warm
 neutrals, no TV" — and apply it in one click. Store sets on the account so
 they follow the user between the website and the extension.
+
+## Credits by property (recording already on)
+
+Since extension 1.2.1, each credit spent from AppFolio is recorded with the
+property and unit it was for (`credit_ledger.property_id`, `property_name`,
+`unit_id`, `unit_name`; refunds carry the same values). Nothing shows this
+yet. When customers ask for it, add a per-property table to the Account page
+(photos staged and net credits per property, by month, with CSV export). To
+look at it now in Supabase's SQL editor:
+
+    select property_name, count(*) filter (where reason = 'stage')
+         - count(*) filter (where reason = 'refund') as credits
+    from credit_ledger where property_id is not null
+    group by property_id, property_name order by credits desc;

@@ -66,6 +66,11 @@
     form.append('label', '0'); // the extension adds its own label, from its settings
     form.append('width', String(image.width));
     form.append('height', String(image.height));
+    // The AppFolio property and unit, for per-property usage (see appfolio.js).
+    const place = job.place || {};
+    for (const [k, v] of [['property_id', place.propertyId], ['property', place.property], ['unit_id', place.unitId], ['unit', place.unit]]) {
+      if (v) form.append(k, String(v).slice(0, 200));
+    }
     const created = await call('/api/jobs', { method: 'POST', body: form });
     for (;;) {
       await new Promise((resolve, reject) => {

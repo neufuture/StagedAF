@@ -127,7 +127,7 @@
     const s = SAF.settings;
     if (!SAF.canStage()) throw Object.assign(new Error(SAF.setupHint()), { code: 'auth' });
     await SAF.send({ type: 'saf:ensure-offscreen' });
-    const details = { name: String(job.name || 'photo').split(/[?#]/)[0].split('/').pop(), room: job.room, style: job.style, custom: job.custom };
+    const details = { name: String(job.name || 'photo').split(/[?#]/)[0].split('/').pop(), room: job.room, style: job.style, custom: job.custom, place: SAF.appfolio && SAF.appfolio.place ? SAF.appfolio.place() : null };
 
     let source;
     if (job.source.file) {

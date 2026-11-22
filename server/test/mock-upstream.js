@@ -129,7 +129,8 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
       const c = state.accounts.get(a.p_user) || 0;
       if (c <= 0) return -1;
       state.accounts.set(a.p_user, c - 1);
-      state.ledger.push({ user: a.p_user, delta: -1, reason: 'stage', ref: 'stage:' + a.p_id, at: new Date().toISOString() });
+      state.ledger.push({ user: a.p_user, delta: -1, reason: 'stage', ref: 'stage:' + a.p_id, at: new Date().toISOString(),
+        property_id: a.p_property_id || null, property_name: a.p_property || null, unit_id: a.p_unit_id || null, unit_name: a.p_unit || null });
       state.stagings.set(a.p_id, { id: a.p_id, user_id: a.p_user, name: a.p_name, room: a.p_room, style: a.p_style, custom: a.p_custom, width: a.p_width, height: a.p_height,
         label: !!a.p_label, status: 'queued', error: null, created_at: new Date().toISOString(), finished_at: null });
       return c - 1;

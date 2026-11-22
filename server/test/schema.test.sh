@@ -80,7 +80,11 @@ check "a stuck job is failed and refunded"           "$(q -c "select json_array_
 check "a finished job can be deleted"                "$(q -c "select delete_staging('$W','$J3')")" t
 q -c "update stagings set created_at = now() - interval '31 days' where id='$J2'"
 check "purge removes stagings older than 30 days"    "$(q -c "select json_array_length(purge_stagings(30))")/$(q -c "select count(*) from stagings where user_id='$W'")" "1/1"
-check "browser roles cannot reach stagings"          "$(q -c "select has_function_privilege('anon','create_staging(uuid,uuid,text,text,text,text,integer,integer,boolean)','execute') or has_function_privilege('authenticated','list_stagings(uuid,integer)','execute') or has_function_privilege('anon','finish_staging(uuid,boolean,text)','execute')")" f
+X=66666666-6666-6666-6666-666666666666; J4=aaaaaaaa-0000-0000-0000-000000000004
+q -c "insert into auth.users values ('$X')"; q -c "select ensure_account('$X','x@b.co',2)" >/dev/null
+check "a staging records its AppFolio property"      "$(q -c "select create_staging('$X','$J4','d.jpg','auto','modern','',1200,800,false,'953','Lincoln Townhomes','2892','4919 NE 2nd Court')")/$(q -c "select property_id||'|'||property_name||'|'||unit_id||'|'||unit_name from credit_ledger where ref='stage:$J4'")" "1/953|Lincoln Townhomes|2892|4919 NE 2nd Court"
+check "…and its refund carries the same property"    "$(q -c "select finish_staging('$J4', false, 'boom')")/$(q -c "select property_id||'|'||unit_id from credit_ledger where ref='refund:$J4'")/$(q -c "select credits from accounts where user_id='$X'")" "t/953|2892/2"
+check "browser roles cannot reach stagings"          "$(q -c "select has_function_privilege('anon','create_staging(uuid,uuid,text,text,text,text,integer,integer,boolean,text,text,text,text)','execute') or has_function_privilege('authenticated','list_stagings(uuid,integer)','execute') or has_function_privilege('anon','finish_staging(uuid,boolean,text)','execute')")" f
 # Promo codes.
 P=44444444-4444-4444-4444-444444444444; Q=55555555-5555-5555-5555-555555555555
 q -c "insert into auth.users values ('$P'),('$Q')"; q -c "select ensure_account('$P','p@b.co',0), ensure_account('$Q','q@b.co',0)" >/dev/null

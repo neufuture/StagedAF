@@ -96,6 +96,13 @@ export async function readUpload(request) {
     custom: clip(form.get('custom'), 600),
     name: clip(form.get('name'), 120).replace(/[\\/]/g, '_') || 'photo.jpg',
     label: form.get('label') === '1',
+    // Where the photo came from in AppFolio, if sent by the extension.
+    place: {
+      property_id: clip(form.get('property_id'), 40).replace(/[^0-9A-Za-z_-]/g, '') || null,
+      property: clip(form.get('property'), 200) || null,
+      unit_id: clip(form.get('unit_id'), 40).replace(/[^0-9A-Za-z_-]/g, '') || null,
+      unit: clip(form.get('unit'), 200) || null,
+    },
   };
 }
 
