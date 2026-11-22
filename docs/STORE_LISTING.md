@@ -43,24 +43,45 @@ Virtually stage unit photos without leaving AppFolio. Furnish empty rooms in abo
 
 Virtually stage unit photos without leaving AppFolio.
 
-UnitStager adds virtual staging to the AppFolio pages you already use.
+UnitStager adds AI virtual staging to the AppFolio Property Manager pages you
+already use. Empty rooms photograph poorly; UnitStager furnishes them in about
+a minute, right where your listing photos live.
 
-On a unit's Photos section, every photo gets a Stage button. Click it, pick a
-room type and style or type what you want, and in about a minute you get a
-furnished version to compare side by side with the original. One more click
-uploads the staged photo to the unit and removes the original; a copy of the
-original is saved to your computer first.
+STAGE PHOTOS ALREADY IN APPFOLIO
+Every photo in a unit's Photos section gets a Stage button. Pick a room type
+and one of eight styles (Modern, Scandinavian, Mid-century modern,
+Transitional, Modern farmhouse, Coastal, Industrial, Traditional), or type
+your own instructions, such as "sectional facing the window, warm neutrals".
+Compare the result side by side with the original, regenerate if it isn't
+right, then replace the original in one click. The staged photo is uploaded to
+the unit, the original is removed, and the unit's default photo stays the
+default. A copy of the original is saved to your computer first.
 
-Uploading a fresh set of photos? Switch on "Stage new uploads" and choose
-which empty rooms to furnish before anything is sent to AppFolio.
+STAGE NEW UPLOADS
+Switch on "Stage new uploads" and, whenever you add photos to a unit, choose
+which empty rooms to furnish before anything is sent to AppFolio. The rest
+upload as they are.
 
-• Furniture is added; walls, floors, windows and fixtures are left as they are
-• Before/after review on every photo, with one-click regenerate
-• Optional "Virtually staged" disclosure label
-• Works on property and unit pages
+BUILT FOR LISTINGS
+• Furniture and decor are added; walls, floors, windows and fixtures are left
+  as they are, so the photo still shows the real unit
+• Optional "Virtually staged" label on each photo for listing-site and
+  advertising disclosure rules
+• Stage several photos at once and keep working while they finish
+• Staging carries on if you close the tab; staged photos are kept for 30 days
+  under Recent stagings at unitstager.com
 
-Sign in with your email to get free staged photos. After that it is pay per
-photo, with credit packs that don't expire and optional auto top-up.
+ACCOUNT AND PRICING
+Sign in with your email (a one-time code, no password) and get free staged
+photos to start. After that it's pay per photo: one credit stages one photo,
+credit packs don't expire, and a failed staging is refunded automatically.
+Optional auto top-up, promo codes, and purchase history with receipts are in
+the extension's settings and on unitstager.com.
+
+PRIVACY
+UnitStager only acts on AppFolio pages, and only on photos you choose to
+stage. It doesn't read tenant, owner or financial data from AppFolio and never
+stores your AppFolio login. Privacy policy: https://unitstager.com/privacy.html
 
 UnitStager is created by Neufuture, LLC. It is an independent product and is
 not affiliated with or endorsed by AppFolio, Inc.
