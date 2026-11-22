@@ -81,9 +81,14 @@ Virtually stage listing photos on AppFolio property and unit pages.
 
 **Remote code:** No. All code is in the package.
 
-**Data usage** — tick these and nothing else:
+**Data usage** — tick these four and nothing else:
 
 - *Personally identifiable information*: the user's email address, for sign-in.
+- *Financial and payment information*: the extension starts credit purchases
+  and shows the user's purchase history (amounts and dates). Card numbers are
+  entered on Stripe's page and never pass through the extension.
+- *Authentication information*: the one-time sign-in code the user types, and
+  the sign-in session the extension keeps so the user stays signed in.
 - *Website content*: the photos the user chooses to stage, and any instructions they type. Sent to the UnitStager server only when the user clicks Stage.
 
 Certify that data is not sold, not used for purposes unrelated to the
