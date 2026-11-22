@@ -25,6 +25,7 @@ before(async () => {
     STRIPE_WEBHOOK_SECRET: WH,
     SITE_URL: 'https://unitstager.com',
     FREE_CREDITS: '2',
+    RATE_LIMIT_SCALE: '1000',
   });
 });
 after(() => {
@@ -483,4 +484,30 @@ test('promo codes: redeem once for credits; bad, used-up and repeat codes are re
   await call('/api/promo', { method: 'POST', token: (await signIn('promo-b@example.com')).access_token, body: { code: 'BETA25' } });
   const c = await signIn('promo-c@example.com');
   assert.match((await call('/api/promo', { method: 'POST', token: c.access_token, body: { code: 'BETA25' } })).data.error, /fully used/);
+});
+
+test('abuse limits: sign-in emails, free credits per network, promo guessing', async () => {
+  // A server with the real (unscaled) limits.
+  const strict = await serve({ SUPABASE_URL: mock.url, SUPABASE_PUBLISHABLE_KEY: 'pub-key', SUPABASE_SECRET_KEY: 'secret-key', FREE_CREDITS: '10' });
+  const post = (path, body, ip) => fetch(strict.url + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip }, body: JSON.stringify(body) });
+  try {
+    for (let i = 0; i < 5; i++) assert.equal((await post('/api/auth/start', { email: 'flood@example.com' }, '198.51.100.' + i)).status, 200);
+    const r = await post('/api/auth/start', { email: 'flood@example.com' }, '198.51.100.99');
+    assert.equal(r.status, 429, 'one address can only be sent so many codes an hour');
+    for (let i = 0; i < 10; i++) await post('/api/auth/start', { email: `x${i}@example.com` }, '203.0.113.5');
+    assert.equal((await post('/api/auth/start', { email: 'x99@example.com' }, '203.0.113.5')).status, 429, 'one network can only request so many codes an hour');
+
+    const signUp = async (email, ip) => (await (await post('/api/auth/verify', { email, code: '123456' }, ip)).json()).credits;
+    assert.deepEqual([await signUp('farm1@example.com', '192.0.2.7'), await signUp('farm2@example.com', '192.0.2.7'), await signUp('farm3@example.com', '192.0.2.7')], [10, 10, 10]);
+    assert.equal(await signUp('farm4@example.com', '192.0.2.7'), 0, 'the 4th new account from one network gets no free credits');
+    assert.equal(await signUp('farm1@example.com', '192.0.2.7'), 10, 'existing accounts are unaffected');
+    assert.equal(await signUp('someone@example.com', '192.0.2.8'), 10, 'other networks are unaffected');
+
+    const tok = (await (await post('/api/auth/verify', { email: 'guess@example.com', code: '123456' }, '192.0.2.50')).json()).access_token;
+    let last;
+    for (let i = 0; i < 21; i++) last = await fetch(strict.url + '/api/promo', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok, 'CF-Connecting-IP': '192.0.2.50' }, body: JSON.stringify({ code: 'GUESS' + i }) });
+    assert.equal(last.status, 429, 'promo guessing is limited per network too');
+  } finally {
+    strict.close();
+  }
 });

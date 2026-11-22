@@ -12,8 +12,19 @@
     return res.value;
   }
 
+  // Original photos are only ever fetched from AppFolio (over HTTPS).
+  const fromAppFolio = (u) => {
+    try {
+      const url = new URL(u);
+      return url.protocol === 'https:' && (url.hostname === 'appfolio.com' || url.hostname.endsWith('.appfolio.com'));
+    } catch {
+      return false;
+    }
+  };
+
   async function loadSource(source, signal) {
     if (source.dataUrl) return SAF.dataUrlToBlob(source.dataUrl);
+    if (!fromAppFolio(source.url)) throw fail('UnitStager only reads photos from AppFolio.', 'fetch-source');
     let res;
     try {
       res = await fetch(source.url, { credentials: 'include', signal });

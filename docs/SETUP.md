@@ -156,8 +156,8 @@ under `vars`. Free sign-up credits are `FREE_CREDITS`. The packs default to
 "PACKS": "[{\"id\":\"pack25\",\"name\":\"25 staged photos\",\"credits\":25,\"amount\":1900},{\"id\":\"pack50\",\"name\":\"50 staged photos\",\"credits\":50,\"amount\":3400},{\"id\":\"pack100\",\"name\":\"100 staged photos\",\"credits\":100,\"amount\":5900}]"
 ```
 
-**After a server update that changes the database.** (Most recently: promo
-codes.) Run
+**After a server update that changes the database.** (Most recently: abuse
+limits.) Run
 `server/supabase/schema.sql` again in the Supabase SQL Editor. It is written
 to be run repeatedly and never removes data.
 
@@ -184,6 +184,16 @@ card switches it off. To see who has it on:
 ```sql
 select email, credits, auto_pack from accounts where auto_pack is not null;
 ```
+
+**Security headers.** `server/public/_headers` sets the website's
+Content-Security-Policy and other security headers. If you add a third-party
+script (for example the Featurebase chat widget), its domains must be added to
+the policy there, or the browser will block it.
+
+**Abuse limits.** The server limits sign-in code emails (per network and per
+address), sign-in attempts, and promo-code attempts, and gives free sign-up
+credits to at most 3 new accounts per network per 30 days. The numbers are in
+`server/src/limits.js`.
 
 **Promo codes (free credits for testers).** Create codes in Supabase:
 **Table Editor → promo_codes → Insert row**.

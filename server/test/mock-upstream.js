@@ -22,6 +22,7 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
     imageDelay: 300,
     stagings: new Map(),
     promos: new Map(), // code -> {credits, max, expires, users:Set}
+    rates: new Map(),
   };
   const userFor = (email) => {
     if (!state.users.has(email)) state.users.set(email, { id: crypto.randomUUID(), email });
@@ -46,6 +47,7 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
       return c - 1;
     },
     get_account({ p_user }) {
+      if (!state.accounts.has(p_user)) return null; // like the real query: no row, no account
       const a = state.auto.get(p_user) || {};
       return { credits: state.accounts.get(p_user) ?? 0, auto_pack: a.pack || null, has_card: !!a.customer, stripe_customer: a.customer || null };
     },
@@ -67,6 +69,18 @@ export async function startMock({ imageBase64 = 'c3RhZ2Vk' } = {}) {
       if (!a.customer) a.customer = p_customer;
       state.auto.set(p_user, a);
       return a.customer;
+    },
+    rate_hit({ p_kind, p_key, p_limit, p_minutes }) {
+      const k = p_kind + ':' + p_key;
+      const cut = Date.now() - p_minutes * 60000;
+      const list = (state.rates.get(k) || []).filter((t) => t > cut);
+      if (list.length >= p_limit) return false;
+      list.push(Date.now());
+      state.rates.set(k, list);
+      return true;
+    },
+    trim_rate_events() {
+      return null;
     },
     // ---- background stagings ----
     create_staging(a) {

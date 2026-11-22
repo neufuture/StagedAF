@@ -11,6 +11,14 @@ const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg' };
 
 // Minimal stand-in for Cloudflare's static asset binding.
+const headerRules = (() => {
+  try {
+    const lines = fs.readFileSync(path.join(publicDir, '_headers'), 'utf8').split('\n').filter((l) => l.trim() && !l.trim().startsWith('#'));
+    return Object.fromEntries(lines.filter((l) => /^\s/.test(l)).map((l) => l.trim().split(/:\s*(.*)/s).slice(0, 2)));
+  } catch {
+    return {};
+  }
+})();
 const ASSETS = {
   async fetch(request) {
     let p = decodeURIComponent(new URL(request.url).pathname);
@@ -19,7 +27,8 @@ const ASSETS = {
     if (!file.startsWith(publicDir)) return new Response('Not found', { status: 404 });
     if (!fs.existsSync(file) && fs.existsSync(file + '.html')) file += '.html';
     if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) return new Response('Not found', { status: 404 });
-    return new Response(fs.readFileSync(file), { headers: { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream' } });
+    if (path.basename(file) === '_headers') return new Response('Not found', { status: 404 });
+    return new Response(fs.readFileSync(file), { headers: { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', ...headerRules } });
   },
 };
 

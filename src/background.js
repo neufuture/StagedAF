@@ -29,6 +29,16 @@ async function getSettings() {
   return SAF.merge(await chrome.storage.local.get(null));
 }
 
+function safeDownload(u) {
+  if (/^data:image\/(jpeg|png|webp);base64,/i.test(String(u))) return true;
+  try {
+    const url = new URL(u);
+    return url.protocol === 'https:' && (url.hostname === 'appfolio.com' || url.hostname.endsWith('.appfolio.com'));
+  } catch {
+    return false;
+  }
+}
+
 function safeName(name) {
   return String(name || 'photo.jpg').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 120);
 }
@@ -44,7 +54,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       reply(getSettings());
       return true;
     case 'saf:download':
-      reply(chrome.downloads.download({ url: msg.url, filename: 'UnitStager/' + safeName(msg.filename), saveAs: false }));
+      // Only staged photos (data: URLs) and AppFolio originals are saved.
+      reply(safeDownload(msg.url) ? chrome.downloads.download({ url: msg.url, filename: 'UnitStager/' + safeName(msg.filename), saveAs: false }) : Promise.reject(new Error('That file cannot be downloaded.')));
       return true;
     case 'saf:get-auth':
       reply(SAF.account.auth());

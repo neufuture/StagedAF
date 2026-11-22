@@ -353,5 +353,41 @@ $$;
 revoke all on function public.redeem_promo(uuid, text) from public, anon, authenticated;
 grant execute on function public.redeem_promo(uuid, text) to service_role;
 
+-- ---------------------------------------------------------------------------
+-- Rate limits (sign-in codes, promo guesses, free sign-up credits per network).
+
+create table if not exists public.rate_events (
+  kind text not null,
+  key  text not null,
+  at   timestamptz not null default now()
+);
+create index if not exists rate_events_idx on public.rate_events (kind, key, at);
+alter table public.rate_events enable row level security;
+
+-- Record one event and say whether it is within the limit (true) or over it
+-- (false, and nothing is recorded). Old events are trimmed as it goes.
+create or replace function public.rate_hit(p_kind text, p_key text, p_limit integer, p_minutes integer)
+returns boolean language plpgsql security definer set search_path = public as $$
+declare n integer;
+begin
+  perform pg_advisory_xact_lock(hashtext(p_kind || ':' || p_key));
+  delete from rate_events where kind = p_kind and key = p_key and at < now() - make_interval(mins => p_minutes);
+  select count(*) into n from rate_events where kind = p_kind and key = p_key;
+  if n >= p_limit then return false; end if;
+  insert into rate_events (kind, key) values (p_kind, p_key);
+  return true;
+end $$;
+
+-- Housekeeping: drop events older than a month.
+create or replace function public.trim_rate_events()
+returns void language sql security definer set search_path = public as $$
+  delete from rate_events where at < now() - interval '31 days';
+$$;
+
+revoke all on function public.rate_hit(text, text, integer, integer) from public, anon, authenticated;
+revoke all on function public.trim_rate_events() from public, anon, authenticated;
+grant execute on function public.rate_hit(text, text, integer, integer) to service_role;
+grant execute on function public.trim_rate_events() to service_role;
+
 -- Tell the Supabase API to pick up new tables and functions straight away.
 notify pgrst, 'reload schema';

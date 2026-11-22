@@ -9,7 +9,7 @@ export const CORS = {
 };
 
 export const json = (data, status = 200, headers = {}) =>
-  new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...CORS, ...headers } });
+  new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...CORS, ...headers } });
 
 // Thrown anywhere in a handler; turned into a JSON error response by the router.
 export class HttpError extends Error {

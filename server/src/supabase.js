@@ -91,7 +91,7 @@ export async function rpc(env, fn, args) {
 }
 
 // Create the account on first sign-in (with the free credits); returns the balance.
-export const ensureAccount = (env, user) => rpc(env, 'ensure_account', { p_user: user.id, p_email: user.email, p_free: Number(env.FREE_CREDITS ?? 10) || 0 });
+export const ensureAccount = (env, user, free) => rpc(env, 'ensure_account', { p_user: user.id, p_email: user.email, p_free: free ?? (Number(env.FREE_CREDITS ?? 10) || 0) });
 
 // Take one credit. Returns the new balance, or -1 if there were none.
 export const spendCredit = (env, userId, ref) => rpc(env, 'spend_credit', { p_user: userId, p_ref: ref });

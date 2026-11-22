@@ -18,6 +18,7 @@
 // Everything else is the static website in ./public.
 import { CORS, HttpError, json, readJson } from './http.js';
 import { cleanup, createJob, deleteJob, jobResult, listJobs, runJob } from './jobs.js';
+import { allow, clientIp, enforce } from './limits.js';
 import { stage } from './stage.js';
 import { AUTO_THRESHOLD, billingPortal, createCheckout, publicPacks, purchases, receipt, webhook } from './stripe.js';
 import { ensureAccount, getAccount, refreshSession, requireUser, rpc, sendCode, setAutoTopup, verifyCode } from './supabase.js';
@@ -30,6 +31,9 @@ async function api(request, env, path, ctx) {
     case 'POST /api/auth/start': {
       const email = String((await readJson(request)).email || '').trim().toLowerCase();
       if (!EMAIL.test(email) || email.length > 254) throw new HttpError(400, 'Enter a valid email address.');
+      const busy = 'Too many sign-in emails. Wait a while and try again.';
+      await enforce(env, 'code-ip', clientIp(request), busy);
+      await enforce(env, 'code-email', email, busy);
       await sendCode(env, email);
       return json({ ok: true });
     }
@@ -38,8 +42,13 @@ async function api(request, env, path, ctx) {
       const email = String(body.email || '').trim().toLowerCase();
       const code = String(body.code || '').replace(/\s+/g, '');
       if (!EMAIL.test(email) || !/^\d{6,10}$/.test(code)) throw new HttpError(400, 'Enter the code from the email.');
+      await enforce(env, 'verify-ip', clientIp(request), 'Too many sign-in attempts. Wait a while and try again.');
       const session = await verifyCode(env, email, code);
-      const credits = await ensureAccount(env, session.user);
+      // Free credits go to at most a few new accounts per network, so they
+      // can't be farmed with throwaway email addresses.
+      const isNew = !(await getAccount(env, session.user.id).catch(() => null));
+      const free = isNew && !(await allow(env, 'free-ip', clientIp(request))) ? 0 : undefined;
+      const credits = await ensureAccount(env, session.user, free);
       return json({ ...session, credits });
     }
     case 'POST /api/auth/refresh': {
@@ -69,6 +78,7 @@ async function api(request, env, path, ctx) {
       const user = await requireUser(env, request);
       const code = String((await readJson(request)).code || '').trim();
       if (!code || code.length > 60) throw new HttpError(400, 'Enter a promo code.');
+      await enforce(env, 'promo-ip', clientIp(request), 'Too many attempts. Try again in an hour.');
       await ensureAccount(env, user);
       const r = (await rpc(env, 'redeem_promo', { p_user: user.id, p_code: code })) || {};
       if (r.ok) return json({ added: r.added, credits: r.credits, code: r.code });

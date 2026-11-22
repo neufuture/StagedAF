@@ -33,7 +33,11 @@ await ctx.route('https://checkout.stripe.test/**', (r) => r.fulfill({ contentTyp
 await ctx.route('https://billing.stripe.test/**', (r) => r.fulfill({ contentType: 'text/html', body: 'mock portal' }));
 await ctx.route('https://pay.stripe.test/**', (r) => r.fulfill({ contentType: 'text/html', body: 'mock receipt' }));
 const errors = [];
-const watch = (p) => p.on('pageerror', (e) => errors.push(e.message));
+const watch = (p) => {
+  p.on('pageerror', (e) => errors.push(e.message));
+  // Anything the Content-Security-Policy blocks shows up as a console error.
+  p.on('console', (m) => m.type() === 'error' && /Content Security Policy|Refused to/i.test(m.text()) && errors.push('CSP: ' + m.text()));
+};
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'us-site-'));
 const photo = (name) => {
   const f = path.join(tmp, name);
@@ -42,6 +46,11 @@ const photo = (name) => {
 };
 
 try {
+  console.log('Security headers');
+  const head = await fetch(site + '/');
+  assert(/frame-ancestors 'none'/.test(head.headers.get('content-security-policy') || '') && head.headers.get('x-frame-options') === 'DENY' && /max-age/.test(head.headers.get('strict-transport-security') || ''), 'pages are sent with a content security policy, clickjacking protection and HTTPS enforcement');
+  assert((await fetch(site + '/_headers')).status === 404, 'the headers file itself is not served');
+
   console.log('Sign up');
   let page = await ctx.newPage();
   watch(page);

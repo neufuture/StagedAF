@@ -134,6 +134,7 @@ export async function cleanup(env) {
   const old = (await rpc(env, 'purge_stagings', { p_days: KEEP_DAYS })) || [];
   const keys = [...stale.map((r) => keyIn(r.user_id, r.id)), ...old.flatMap((r) => [keyIn(r.user_id, r.id), keyOut(r.user_id, r.id)])];
   for (let i = 0; i < keys.length; i += 1000) await env.PHOTOS.delete(keys.slice(i, i + 1000));
+  await rpc(env, 'trim_rate_events', {}).catch(() => {});
   if (stale.length || old.length) console.log('cleanup: failed', stale.length, 'stuck, purged', old.length, 'expired');
   return { stale: stale.length, purged: old.length };
 }
