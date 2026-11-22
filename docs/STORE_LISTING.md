@@ -1,6 +1,8 @@
 # Publishing UnitStager to the Chrome Web Store and Edge Add-ons
 
-The upload package is `dist/unitstager-extension-<version>.zip`. The same file
+Everything below is bundled in one download, `dist/unitstager-store-kit-<version>.zip`
+(rebuild with `bash scripts/store-kit.sh`). The upload package itself is
+`dist/unitstager-extension-<version>.zip`. The same file
 goes to both stores. Rebuild it after any change with `bash scripts/package.sh`
 (bump `"version"` in `manifest.json` first; stores reject a repeated version).
 
