@@ -55,6 +55,7 @@ const pngs = [
   ['icons/icon48.png', svg(SQUARE, full), 48],
   ['icons/icon128.png', svg(SQUARE, full), 128],
   ['brand/unitstager-icon-512.png', svg(SQUARE, full), 512],
+  ['brand/unitstager-icon-300.png', svg(SQUARE, full), 300], // Edge Add-ons store logo
   ['brand/unitstager-icon-circle-512.png', svg(CIRCLE, full), 512],
   ['server/public/favicon-32.png', svg(SQUARE, small), 32],
   ['server/public/apple-touch-icon.png', svg(BLEED, full), 180], // iOS rounds the corners itself

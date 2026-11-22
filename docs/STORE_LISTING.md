@@ -107,7 +107,7 @@ Ready to upload, in the `store/` folder:
   `screenshot-3-in-appfolio.png` — 1280×800, in that order.
 - `promo-tile-440x280.png` — Chrome's optional small promo tile.
 - `marquee-1400x560.png` — Chrome's optional marquee promo tile.
-- Store icon: `icons/icon128.png`.
+- Store icon: `icons/icon128.png` (Chrome); `logo/unitstager-icon-300.png` (Edge, 300×300).
 - Logo files for anywhere else (social profiles, email signature) are in
   `brand/`, as a rounded square and as a circle.
 

@@ -13,7 +13,7 @@ cp "dist/unitstager-extension-$version.zip" "$tmp/unitstager-store-kit/1-upload-
 cp store/screenshot-*.png "$tmp/unitstager-store-kit/screenshots/"
 cp store/promo-tile-440x280.png store/marquee-1400x560.png "$tmp/unitstager-store-kit/"
 cp icons/icon128.png "$tmp/unitstager-store-kit/logo/store-icon-128.png"
-cp brand/unitstager-icon-512.png brand/unitstager-icon-circle-512.png brand/unitstager-icon.svg brand/unitstager-icon-circle.svg "$tmp/unitstager-store-kit/logo/"
+cp brand/unitstager-icon-300.png brand/unitstager-icon-512.png brand/unitstager-icon-circle-512.png brand/unitstager-icon.svg brand/unitstager-icon-circle.svg "$tmp/unitstager-store-kit/logo/"
 cp docs/STORE_LISTING.md "$tmp/unitstager-store-kit/listing-text.md"
 rm -f dist/unitstager-store-kit-*.zip
 (cd "$tmp" && zip -r -q -X kit.zip unitstager-store-kit)
