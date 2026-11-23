@@ -177,8 +177,6 @@ create table if not exists public.stagings (
 create index if not exists stagings_user_idx on public.stagings (user_id, created_at desc);
 alter table public.stagings enable row level security;
 
--- Take one credit and record the staging, together. Returns the new balance,
--- or -1 if there were no credits (and nothing is recorded).
 -- Which AppFolio property / unit each credit was spent on (sent by the
 -- extension; empty for the website). Kept on the ledger, which is never
 -- purged, so usage can later be totalled per property.
@@ -189,6 +187,8 @@ alter table public.credit_ledger add column if not exists unit_name     text;
 create index if not exists credit_ledger_property_idx on public.credit_ledger (user_id, property_id) where property_id is not null;
 
 drop function if exists public.create_staging(uuid, uuid, text, text, text, text, integer, integer, boolean);
+-- Take one credit and record the staging, together. Returns the new balance,
+-- or -1 if there were no credits (and nothing is recorded).
 create or replace function public.create_staging(p_user uuid, p_id uuid, p_name text, p_room text, p_style text, p_custom text,
                                                  p_width integer, p_height integer, p_label boolean,
                                                  p_property_id text default null, p_property text default null,
