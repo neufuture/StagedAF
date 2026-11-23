@@ -1,0 +1,8 @@
+# UnitStager. The studio, account and thank-you pages carry a noindex tag
+# instead of a Disallow here, so search engines can read it and drop them.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /verify
+
+Sitemap: https://unitstager.com/sitemap.xml
